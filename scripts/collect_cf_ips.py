@@ -33,6 +33,20 @@ URI_RE = re.compile(
     r"^[a-z][a-z0-9+.-]*://[^@\n]+@(?P<addr>\[[^\]]+\]|[^:/?#]+):(?P<port>\d+)[^#\n]*(?:#(?P<name>[^\r\n]*))?",
     re.I,
 )
+LOCAL_IP_PATH = Path("local_ip.txt")
+
+
+def read_local_items():
+    if not LOCAL_IP_PATH.exists():
+        return []
+
+    items = []
+    for raw_line in LOCAL_IP_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        match = re.fullmatch(r"(?P<addr>\d+(?:\.\d+){3}):(?P<port>\d+)#.+", line)
+        if match:
+            items.append((line, match.group("addr"), match.group("port")))
+    return items
 
 
 def read_url(host):
@@ -83,7 +97,8 @@ def parse_items(text):
 
 
 def collect():
-    seen = set()
+    local_items = read_local_items()
+    seen = {(address, port) for _, address, port in local_items}
     grouped = {region: [] for region in REGION_ORDER}
     errors = []
 
@@ -98,7 +113,7 @@ def collect():
         except Exception as exc:
             errors.append(f"{source}: {type(exc).__name__}: {exc}")
 
-    lines = []
+    lines = [line for line, _, _ in local_items]
     for region in REGION_ORDER:
         for index, (address, port) in enumerate(grouped[region], 1):
             lines.append(f"{address}:{port}#{region}{index}")
