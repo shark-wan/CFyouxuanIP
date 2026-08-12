@@ -1,0 +1,31 @@
+name: Collect CF optimized IPs
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Collect nodes
+        run: python scripts/collect_cf_ips.py
+      - name: Commit ip.txt
+        run: |
+          if git diff --quiet -- ip.txt; then
+            echo "ip.txt unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ip.txt
+          git commit -m "Update optimized IP list"
+          git push
