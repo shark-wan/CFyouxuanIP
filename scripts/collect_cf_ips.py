@@ -5,6 +5,7 @@ import ssl
 import sys
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 SOURCES = (
     "sub.cmliussss.net",
