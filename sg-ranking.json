@@ -2,7 +2,7 @@
   "version": 1,
   "region": "SG",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-12T14:09:15.137598+00:00",
+  "generated_at": "2026-09-12T14:13:00.703058+00:00",
   "candidate_fingerprint": "cbc7e7483120a5a76ae6a514023e57e214b650de7bc696c762d2b828e72a3655",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
   "full_measurement": false,
@@ -39,16 +39,6 @@
     },
     {
       "rank": 4,
-      "name": "SG12",
-      "source_name": "SG12",
-      "address": "27.50.48.59",
-      "port": 2096,
-      "tcp_ms": 190.39,
-      "speed_bps": 866698.19,
-      "measured_at": "2026-09-12T14:08:50.925622+00:00"
-    },
-    {
-      "rank": 5,
       "name": "SG37",
       "source_name": "SG37",
       "address": "43.160.240.180",
@@ -56,6 +46,16 @@
       "tcp_ms": 1125.65,
       "speed_bps": 821879.62,
       "measured_at": "2026-09-12T14:08:50.925622+00:00"
+    },
+    {
+      "rank": 5,
+      "name": "SG12",
+      "source_name": "SG12",
+      "address": "27.50.48.59",
+      "port": 2096,
+      "tcp_ms": 173.17,
+      "speed_bps": 648888.05,
+      "measured_at": "2026-09-12T14:12:35.678210+00:00"
     }
   ]
 }
