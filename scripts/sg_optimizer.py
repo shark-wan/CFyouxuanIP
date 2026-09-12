@@ -24,9 +24,10 @@ XRAY = os.environ.get("XRAY_BIN", "/usr/local/bin/xray")
 SUB_URL = os.environ.get("SG_SUB_URL", "").strip()
 TEST_URL = os.environ.get(
     "SG_TEST_URL",
-    "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip",
+    "https://proof.ovh.net/files/10Mb.dat",
 )
 TEST_BYTES = int(os.environ.get("SG_TEST_BYTES", "8388608"))
+MEASUREMENT_ID = hashlib.sha256(f"{TEST_URL}\n{TEST_BYTES}\nrange-download".encode()).hexdigest()
 RANKING_FILE = ROOT / "sg-ranking.json"
 STATE_FILE = Path(os.environ.get("SG_STATE_FILE", "/var/lib/xray-sg-optimizer/state.json"))
 TCP_ATTEMPTS = 3
@@ -247,6 +248,26 @@ def ranked_slots(nodes: list[dict]) -> list[dict]:
     return working[:5]
 
 
+def measure_full_candidates(candidates: list[dict]) -> list[dict]:
+    """Measure the TCP-fastest ten first, then extend if needed."""
+    probed = probe_tcp_many(candidates)
+    tcp_ok = sorted(
+        (node for node in probed if node.get("tcp_ms") is not None),
+        key=lambda node: node["tcp_ms"],
+    )
+    measured = []
+    for start in range(0, len(tcp_ok), TOP_TCP):
+        batch = tcp_ok[start:start + TOP_TCP]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, max(1, len(batch)))) as pool:
+            measured.extend(pool.map(speed_probe, batch))
+        if sum(node.get("speed_bps") is not None for node in measured) >= 5:
+            break
+    now = datetime.now(timezone.utc).isoformat()
+    for node in measured:
+        node["measured_at"] = now
+    return ranked_slots(measured)
+
+
 def speed_key(node: dict) -> tuple[float, float]:
     return (-(node.get("speed_bps") or 0), node.get("tcp_ms") or 999999)
 
@@ -317,9 +338,10 @@ def ranking_payload(slots: list[dict], candidate_hash: str, full: bool) -> dict:
     return {
         "version": 1,
         "region": "SG",
-        "method": "TCP median of 3; concurrent top 10; Xray proxy download 8 MiB",
+        "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "candidate_fingerprint": candidate_hash,
+        "measurement_id": MEASUREMENT_ID,
         "full_measurement": full,
         "slots": output,
     }
@@ -332,15 +354,9 @@ def main():
     candidate_hash = fingerprint(candidates)
     old_state = load_state()
     full = old_state.get("candidate_fingerprint") != candidate_hash or len(old_state.get("slots", [])) < 5
+    full = full or old_state.get("measurement_id") != MEASUREMENT_ID
     if full:
-        probed = probe_tcp_many(candidates)
-        tcp_ok = sorted([n for n in probed if n.get("tcp_ms") is not None], key=lambda n: n["tcp_ms"])[:TOP_TCP]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, max(1, len(tcp_ok)))) as pool:
-            measured = list(pool.map(speed_probe, tcp_ok))
-        now = datetime.now(timezone.utc).isoformat()
-        for node in measured:
-            node["measured_at"] = now
-        slots = ranked_slots(measured)
+        slots = measure_full_candidates(candidates)
         if len(slots) < 5:
             raise RuntimeError(f"only {len(slots)} SG nodes completed proxy speed tests")
     else:
@@ -348,18 +364,16 @@ def main():
         if slots is None:
             full = True
             old_state = {}
-            probed = probe_tcp_many(candidates)
-            tcp_ok = sorted([n for n in probed if n.get("tcp_ms") is not None], key=lambda n: n["tcp_ms"])[:TOP_TCP]
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, max(1, len(tcp_ok)))) as pool:
-                measured = list(pool.map(speed_probe, tcp_ok))
-            now = datetime.now(timezone.utc).isoformat()
-            for node in measured:
-                node["measured_at"] = now
-            slots = ranked_slots(measured)
+            slots = measure_full_candidates(candidates)
             if len(slots) < 5:
                 raise RuntimeError(f"only {len(slots)} SG nodes completed proxy speed tests")
     payload = ranking_payload(slots, candidate_hash, full)
-    save_state({"candidate_fingerprint": candidate_hash, "slots": slots, "updated_at": payload["generated_at"]})
+    save_state({
+        "candidate_fingerprint": candidate_hash,
+        "measurement_id": MEASUREMENT_ID,
+        "slots": slots,
+        "updated_at": payload["generated_at"],
+    })
     RANKING_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
