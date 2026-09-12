@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "region": "SG",
+  "method": "TCP median of 3; concurrent top 10; Xray proxy download 8 MiB",
+  "generated_at": "2026-09-12T07:44:12.204172+00:00",
+  "candidate_fingerprint": "2a939a14602e49f6d29fec594165a299ab87b6dfa15ef515073c76340dbde7a0",
+  "full_measurement": true,
+  "slots": [
+    {
+      "rank": 1,
+      "name": "AAA-SG36",
+      "source_name": "SG36",
+      "address": "43.159.4.80",
+      "port": 443,
+      "tcp_ms": 39.36,
+      "speed_bps": 7802419.99,
+      "measured_at": "2026-09-12T07:44:12.203709+00:00"
+    },
+    {
+      "rank": 2,
+      "name": "BBB-SG32",
+      "source_name": "SG32",
+      "address": "103.190.178.195",
+      "port": 443,
+      "tcp_ms": 95.31,
+      "speed_bps": 2117721.43,
+      "measured_at": "2026-09-12T07:44:12.203709+00:00"
+    },
+    {
+      "rank": 3,
+      "name": "CCC-SG24",
+      "source_name": "SG24",
+      "address": "103.195.191.70",
+      "port": 443,
+      "tcp_ms": 100.15,
+      "speed_bps": 2086656.64,
+      "measured_at": "2026-09-12T07:44:12.203709+00:00"
+    },
+    {
+      "rank": 4,
+      "name": "SG9",
+      "source_name": "SG9",
+      "address": "27.50.48.142",
+      "port": 2083,
+      "tcp_ms": 164.05,
+      "speed_bps": 1119209.9,
+      "measured_at": "2026-09-12T07:44:12.203709+00:00"
+    },
+    {
+      "rank": 5,
+      "name": "SG37",
+      "source_name": "SG37",
+      "address": "43.160.240.180",
+      "port": 443,
+      "tcp_ms": 83.83,
+      "speed_bps": 820407.54,
+      "measured_at": "2026-09-12T07:44:12.203709+00:00"
+    }
+  ]
+}
