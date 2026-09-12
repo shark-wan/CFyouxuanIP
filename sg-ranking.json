@@ -2,40 +2,40 @@
   "version": 1,
   "region": "SG",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-12T19:14:00.858658+00:00",
-  "candidate_fingerprint": "27ffe6a64ffc1e6375cf499d151a98591662f1fbe1cc539fe1f2cf77ae963bad",
+  "generated_at": "2026-09-12T20:17:24.816528+00:00",
+  "candidate_fingerprint": "750ba381323910abb9c973ee3af09628c75af5c4eb9bfc77b5b8cf9a6407a0d5",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
   "full_measurement": true,
   "slots": [
     {
       "rank": 1,
-      "name": "AAA-SG40",
-      "source_name": "SG40",
-      "address": "82.109.96.205",
+      "name": "AAA-BBB-SG36",
+      "source_name": "BBB-SG36",
+      "address": "54.169.146.255",
       "port": 443,
-      "tcp_ms": 66.63,
-      "speed_bps": 3251563.55,
-      "measured_at": "2026-09-12T19:14:00.857738+00:00"
+      "tcp_ms": 71.79,
+      "speed_bps": 3134259.74,
+      "measured_at": "2026-09-12T20:17:24.816043+00:00"
     },
     {
       "rank": 2,
-      "name": "BBB-SG36",
-      "source_name": "SG36",
-      "address": "54.169.146.255",
+      "name": "BBB-AAA-SG40",
+      "source_name": "AAA-SG40",
+      "address": "82.109.96.205",
       "port": 443,
-      "tcp_ms": 62.54,
-      "speed_bps": 3207332.44,
-      "measured_at": "2026-09-12T19:14:00.857738+00:00"
+      "tcp_ms": 72.73,
+      "speed_bps": 3102597.63,
+      "measured_at": "2026-09-12T20:17:24.816043+00:00"
     },
     {
       "rank": 3,
-      "name": "CCC-BBB-AAA-SG32",
-      "source_name": "BBB-AAA-SG32",
-      "address": "103.190.178.195",
-      "port": 443,
-      "tcp_ms": 72.9,
-      "speed_bps": 3202638.89,
-      "measured_at": "2026-09-12T19:14:00.857738+00:00"
+      "name": "CCC-SG35",
+      "source_name": "SG35",
+      "address": "103.255.208.163",
+      "port": 35993,
+      "tcp_ms": 39.94,
+      "speed_bps": 3071351.76,
+      "measured_at": "2026-09-12T20:17:24.816043+00:00"
     },
     {
       "rank": 4,
@@ -43,19 +43,19 @@
       "source_name": "CCC-AAA-AAA-AAA-AAA-SG33",
       "address": "43.159.4.80",
       "port": 443,
-      "tcp_ms": 41.21,
-      "speed_bps": 3013532.61,
-      "measured_at": "2026-09-12T19:14:00.857738+00:00"
+      "tcp_ms": 40.71,
+      "speed_bps": 3061207.3,
+      "measured_at": "2026-09-12T20:17:24.816043+00:00"
     },
     {
       "rank": 5,
-      "name": "SG26",
-      "source_name": "SG26",
-      "address": "18.139.30.198",
+      "name": "SG22",
+      "source_name": "SG22",
+      "address": "124.243.136.65",
       "port": 443,
-      "tcp_ms": 70.1,
-      "speed_bps": 2977578.91,
-      "measured_at": "2026-09-12T19:14:00.857738+00:00"
+      "tcp_ms": 67.7,
+      "speed_bps": 2863907.35,
+      "measured_at": "2026-09-12T20:17:24.816043+00:00"
     }
   ]
 }
