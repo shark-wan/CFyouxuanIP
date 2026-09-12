@@ -2,14 +2,24 @@
   "version": 1,
   "region": "SG",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-12T07:54:02.007509+00:00",
+  "generated_at": "2026-09-12T09:36:39.539283+00:00",
   "candidate_fingerprint": "2a939a14602e49f6d29fec594165a299ab87b6dfa15ef515073c76340dbde7a0",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
-  "full_measurement": true,
+  "full_measurement": false,
   "slots": [
     {
       "rank": 1,
-      "name": "AAA-SG33",
+      "name": "AAA-SG32",
+      "source_name": "SG32",
+      "address": "103.190.178.195",
+      "port": 443,
+      "tcp_ms": 1098.35,
+      "speed_bps": 2421752.16,
+      "measured_at": "2026-09-12T09:36:05.142957+00:00"
+    },
+    {
+      "rank": 2,
+      "name": "BBB-SG33",
       "source_name": "SG33",
       "address": "103.255.208.163",
       "port": 35993,
@@ -18,8 +28,8 @@
       "measured_at": "2026-09-12T07:54:02.006650+00:00"
     },
     {
-      "rank": 2,
-      "name": "BBB-SG24",
+      "rank": 3,
+      "name": "CCC-SG24",
       "source_name": "SG24",
       "address": "103.195.191.70",
       "port": 443,
@@ -28,8 +38,8 @@
       "measured_at": "2026-09-12T07:54:02.006650+00:00"
     },
     {
-      "rank": 3,
-      "name": "CCC-SG37",
+      "rank": 4,
+      "name": "SG37",
       "source_name": "SG37",
       "address": "43.160.240.180",
       "port": 443,
@@ -38,23 +48,13 @@
       "measured_at": "2026-09-12T07:54:02.006650+00:00"
     },
     {
-      "rank": 4,
+      "rank": 5,
       "name": "SG23",
       "source_name": "SG23",
       "address": "103.195.191.165",
       "port": 443,
       "tcp_ms": 113.35,
       "speed_bps": 505530.76,
-      "measured_at": "2026-09-12T07:54:02.006650+00:00"
-    },
-    {
-      "rank": 5,
-      "name": "SG32",
-      "source_name": "SG32",
-      "address": "103.190.178.195",
-      "port": 443,
-      "tcp_ms": 91.31,
-      "speed_bps": 381641.92,
       "measured_at": "2026-09-12T07:54:02.006650+00:00"
     }
   ]
