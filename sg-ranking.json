@@ -2,7 +2,7 @@
   "version": 1,
   "region": "SG",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-12T09:36:39.539283+00:00",
+  "generated_at": "2026-09-12T09:40:21.477525+00:00",
   "candidate_fingerprint": "2a939a14602e49f6d29fec594165a299ab87b6dfa15ef515073c76340dbde7a0",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
   "full_measurement": false,
