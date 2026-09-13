@@ -8,6 +8,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import socket
 import statistics
 import subprocess
@@ -35,6 +36,13 @@ TCP_TIMEOUT = 3.0
 PROXY_TIMEOUT = 8
 SPEED_TIMEOUT = 28
 TOP_TCP = 10
+RANK_PREFIX_RE = re.compile(r"^(?:(?:AAA|BBB|CCC)-)+", re.IGNORECASE)
+
+
+def canonical_name(name: str, fallback: str) -> str:
+    """Remove any old position labels from a subscription node name."""
+    clean = RANK_PREFIX_RE.sub("", name.strip())
+    return clean or fallback
 
 
 def fetch_subscription() -> str:
@@ -65,9 +73,10 @@ def parse_vless(line: str) -> dict | None:
         extra = {}
         if query.get("extra"):
             extra = json.loads(query["extra"][0])
-        name = urllib.parse.unquote(parsed.fragment or "")
-        if "SG" not in name.upper():
+        raw_name = urllib.parse.unquote(parsed.fragment or "")
+        if "SG" not in raw_name.upper():
             return None
+        name = canonical_name(raw_name, f"SG-{parsed.hostname}:{parsed.port}")
         return {
             "uri": line,
             "name": name or f"SG-{parsed.hostname}:{parsed.port}",
@@ -325,10 +334,11 @@ def ranking_payload(slots: list[dict], candidate_hash: str, full: bool) -> dict:
     labels = ["AAA", "BBB", "CCC", "", ""]
     output = []
     for rank, node in enumerate(slots[:5], 1):
+        source_name = canonical_name(node.get("name", ""), f"SG-{node['address']}:{node['port']}")
         output.append({
             "rank": rank,
-            "name": f"{labels[rank - 1] + '-' if labels[rank - 1] else ''}{node['name']}",
-            "source_name": node["name"],
+            "name": f"{labels[rank - 1] + '-' if labels[rank - 1] else ''}{source_name}",
+            "source_name": source_name,
             "address": node["address"],
             "port": node["port"],
             "tcp_ms": node.get("tcp_ms"),
