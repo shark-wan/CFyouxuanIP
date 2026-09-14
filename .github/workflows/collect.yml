@@ -21,7 +21,7 @@ jobs:
           python-version: "3.x"
       - name: Collect nodes
         run: python scripts/collect_cf_ips.py
-      - name: Apply local SG ranking
+      - name: Apply local SG and JP ranking
         run: python scripts/apply_sg_ranking.py
       - name: Commit ip.txt
         run: |

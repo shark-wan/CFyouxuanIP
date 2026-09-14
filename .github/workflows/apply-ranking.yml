@@ -1,4 +1,4 @@
-name: Apply local SG ranking
+name: Apply local SG and JP ranking
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Apply local SG ranking
+      - name: Apply local SG and JP ranking
         run: python scripts/apply_sg_ranking.py
       - name: Commit ip.txt
         run: |
