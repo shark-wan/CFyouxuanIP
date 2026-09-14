@@ -2,14 +2,24 @@
   "version": 1,
   "region": "SG",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-14T06:17:26.193952+00:00",
+  "generated_at": "2026-09-14T07:10:56.675263+00:00",
   "candidate_fingerprint": "88f33796fa01f867fc8218b9beb22731cf66cb212f770ecde3b7f83156ba1cf6",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
-  "full_measurement": true,
+  "full_measurement": false,
   "slots": [
     {
       "rank": 1,
-      "name": "AAA-SG58",
+      "name": "AAA-SG26",
+      "source_name": "SG26",
+      "address": "18.138.252.84",
+      "port": 443,
+      "tcp_ms": 66.63,
+      "speed_bps": 2868271.82,
+      "measured_at": "2026-09-14T07:10:24.343393+00:00"
+    },
+    {
+      "rank": 2,
+      "name": "BBB-SG58",
       "source_name": "SG58",
       "address": "8.219.116.94",
       "port": 443,
@@ -18,8 +28,8 @@
       "measured_at": "2026-09-14T06:17:26.192929+00:00"
     },
     {
-      "rank": 2,
-      "name": "BBB-SG5",
+      "rank": 3,
+      "name": "CCC-SG5",
       "source_name": "SG5",
       "address": "13.229.62.44",
       "port": 443,
@@ -28,8 +38,8 @@
       "measured_at": "2026-09-14T06:17:26.192929+00:00"
     },
     {
-      "rank": 3,
-      "name": "CCC-SG70",
+      "rank": 4,
+      "name": "SG70",
       "source_name": "SG70",
       "address": "23.249.27.136",
       "port": 23333,
@@ -38,23 +48,13 @@
       "measured_at": "2026-09-14T06:17:26.192929+00:00"
     },
     {
-      "rank": 4,
+      "rank": 5,
       "name": "SG59",
       "source_name": "SG59",
       "address": "8.219.173.17",
       "port": 443,
       "tcp_ms": 12.1,
       "speed_bps": 2558930.13,
-      "measured_at": "2026-09-14T06:17:26.192929+00:00"
-    },
-    {
-      "rank": 5,
-      "name": "SG26",
-      "source_name": "SG26",
-      "address": "18.138.252.84",
-      "port": 443,
-      "tcp_ms": 12.0,
-      "speed_bps": 2557743.4,
       "measured_at": "2026-09-14T06:17:26.192929+00:00"
     }
   ]
