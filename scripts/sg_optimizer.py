@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure SG VLESS/XHTTP nodes and publish only sg-ranking.json."""
+"""Measure SG and JP VLESS/XHTTP nodes and publish only sg-ranking.json."""
 
 from __future__ import annotations
 
@@ -37,6 +37,10 @@ PROXY_TIMEOUT = 8
 SPEED_TIMEOUT = 28
 TOP_TCP = 10
 RANK_PREFIX_RE = re.compile(r"^(?:(?:AAA|BBB|CCC)-)+", re.IGNORECASE)
+REGION_CONFIG = {
+    "SG": {"slots": 5, "challenges": 2, "labels": ("AAA", "BBB", "CCC", "", "")},
+    "JP": {"slots": 3, "challenges": 1, "labels": ("AAA", "BBB", "")},
+}
 
 
 def canonical_name(name: str, fallback: str) -> str:
@@ -61,10 +65,13 @@ def fetch_subscription() -> str:
     return raw
 
 
-def parse_vless(line: str) -> dict | None:
+def parse_vless(line: str, region: str = "SG") -> dict | None:
     line = line.strip()
     if not line.lower().startswith("vless://"):
         return None
+    region = region.upper()
+    if region not in REGION_CONFIG:
+        raise ValueError(f"unsupported region: {region}")
     try:
         parsed = urllib.parse.urlsplit(line)
         if not parsed.hostname or not parsed.port or not parsed.username:
@@ -74,12 +81,12 @@ def parse_vless(line: str) -> dict | None:
         if query.get("extra"):
             extra = json.loads(query["extra"][0])
         raw_name = urllib.parse.unquote(parsed.fragment or "")
-        if "SG" not in raw_name.upper():
+        if region not in raw_name.upper():
             return None
-        name = canonical_name(raw_name, f"SG-{parsed.hostname}:{parsed.port}")
+        name = canonical_name(raw_name, f"{region}-{parsed.hostname}:{parsed.port}")
         return {
             "uri": line,
-            "name": name or f"SG-{parsed.hostname}:{parsed.port}",
+            "name": name or f"{region}-{parsed.hostname}:{parsed.port}",
             "address": parsed.hostname,
             "port": parsed.port,
             "uuid": urllib.parse.unquote(parsed.username),
@@ -98,11 +105,11 @@ def parse_vless(line: str) -> dict | None:
         return None
 
 
-def parse_candidates(text: str) -> list[dict]:
+def parse_candidates(text: str, region: str = "SG") -> list[dict]:
     seen = set()
     candidates = []
     for line in text.splitlines():
-        node = parse_vless(line)
+        node = parse_vless(line, region)
         if not node:
             continue
         key = (node["address"], node["port"])
@@ -251,13 +258,13 @@ def save_state(state: dict) -> None:
     temporary.replace(STATE_FILE)
 
 
-def ranked_slots(nodes: list[dict]) -> list[dict]:
+def ranked_slots(nodes: list[dict], limit: int) -> list[dict]:
     working = [node for node in nodes if node.get("speed_bps")]
     working.sort(key=lambda x: (-x["speed_bps"], x.get("tcp_ms") or 999999))
-    return working[:5]
+    return working[:limit]
 
 
-def measure_full_candidates(candidates: list[dict]) -> list[dict]:
+def measure_full_candidates(candidates: list[dict], limit: int) -> list[dict]:
     """Measure the TCP-fastest ten first, then extend if needed."""
     probed = probe_tcp_many(candidates)
     tcp_ok = sorted(
@@ -269,12 +276,12 @@ def measure_full_candidates(candidates: list[dict]) -> list[dict]:
         batch = tcp_ok[start:start + TOP_TCP]
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, max(1, len(batch)))) as pool:
             measured.extend(pool.map(speed_probe, batch))
-        if sum(node.get("speed_bps") is not None for node in measured) >= 5:
+        if sum(node.get("speed_bps") is not None for node in measured) >= limit:
             break
     now = datetime.now(timezone.utc).isoformat()
     for node in measured:
         node["measured_at"] = now
-    return ranked_slots(measured)
+    return ranked_slots(measured, limit)
 
 
 def speed_key(node: dict) -> tuple[float, float]:
@@ -295,13 +302,15 @@ def restore_slot(item: dict, by_key: dict[tuple[str, int], dict]) -> dict | None
     return node
 
 
-def incremental_slots(candidates: list[dict], old_state: dict) -> list[dict] | None:
+def incremental_slots(
+    candidates: list[dict], old_state: dict, limit: int, challenge_count: int
+) -> list[dict] | None:
     by_key = {(node["address"], node["port"]): node for node in candidates}
     old_slots = old_state.get("slots", [])
-    if not isinstance(old_slots, list) or len(old_slots) < 5:
+    if not isinstance(old_slots, list) or len(old_slots) < limit:
         return None
     slots = []
-    for item in old_slots[:5]:
+    for item in old_slots[:limit]:
         if not isinstance(item, dict):
             return None
         node = restore_slot(item, by_key)
@@ -311,7 +320,8 @@ def incremental_slots(candidates: list[dict], old_state: dict) -> list[dict] | N
 
     now = datetime.now(timezone.utc).isoformat()
     challengers = []
-    for challenger in slots[3:5]:
+    challenger_start = limit - challenge_count
+    for challenger in slots[challenger_start:limit]:
         original = dict(challenger)
         probed = tcp_probe(challenger)
         if probed.get("tcp_ms") is not None:
@@ -327,14 +337,62 @@ def incremental_slots(candidates: list[dict], old_state: dict) -> list[dict] | N
 
     # Sort once after both challenges. This keeps the displaced nodes stable
     # when both challengers beat incumbents in the same run.
-    return sorted(slots[:3] + challengers, key=speed_key)[:5]
+    return sorted(slots[:challenger_start] + challengers, key=speed_key)[:limit]
 
 
-def ranking_payload(slots: list[dict], candidate_hash: str, full: bool) -> dict:
-    labels = ["AAA", "BBB", "CCC", "", ""]
+def state_for_region(state: dict, region: str) -> dict:
+    current = state.get(region)
+    if isinstance(current, dict):
+        return current
+    if region == "SG" and isinstance(state.get("slots"), list):
+        return {
+            "candidate_fingerprint": state.get("candidate_fingerprint"),
+            "measurement_id": state.get("measurement_id"),
+            "slots": state.get("slots"),
+        }
+    return {}
+
+
+def optimize_region(
+    region: str, candidates: list[dict], old_state: dict
+) -> tuple[list[dict], str, bool]:
+    config = REGION_CONFIG[region]
+    limit = config["slots"]
+    if not candidates:
+        raise RuntimeError(f"no {region} VLESS nodes found in subscription")
+    candidate_hash = fingerprint(candidates)
+    old_slots = old_state.get("slots", [])
+    full = (
+        old_state.get("candidate_fingerprint") != candidate_hash
+        or old_state.get("measurement_id") != MEASUREMENT_ID
+        or not isinstance(old_slots, list)
+        or len(old_slots) < limit
+        or any(
+            not isinstance(slot, dict) or not slot.get("speed_bps")
+            for slot in old_slots[:limit]
+        )
+    )
+    if full:
+        slots = measure_full_candidates(candidates, limit)
+        if len(slots) < limit:
+            raise RuntimeError(f"only {len(slots)} {region} nodes completed proxy speed tests")
+    else:
+        slots = incremental_slots(candidates, old_state, limit, config["challenges"])
+        if slots is None:
+            full = True
+            slots = measure_full_candidates(candidates, limit)
+            if len(slots) < limit:
+                raise RuntimeError(f"only {len(slots)} {region} nodes completed proxy speed tests")
+    return slots, candidate_hash, full
+
+
+def output_slots(slots: list[dict], region: str) -> list[dict]:
+    labels = REGION_CONFIG[region]["labels"]
     output = []
-    for rank, node in enumerate(slots[:5], 1):
-        source_name = canonical_name(node.get("name", ""), f"SG-{node['address']}:{node['port']}")
+    for rank, node in enumerate(slots[: len(labels)], 1):
+        source_name = canonical_name(
+            node.get("name", ""), f"{region}-{node['address']}:{node['port']}"
+        )
         output.append({
             "rank": rank,
             "name": f"{labels[rank - 1] + '-' if labels[rank - 1] else ''}{source_name}",
@@ -345,54 +403,74 @@ def ranking_payload(slots: list[dict], candidate_hash: str, full: bool) -> dict:
             "speed_bps": node.get("speed_bps"),
             "measured_at": node.get("measured_at"),
         })
+    return output
+
+
+def ranking_payload(
+    sg_slots: list[dict],
+    sg_hash: str,
+    sg_full: bool,
+    jp_slots: list[dict],
+    jp_hash: str,
+    jp_full: bool,
+) -> dict:
+    generated_at = datetime.now(timezone.utc).isoformat()
     return {
-        "version": 1,
-        "region": "SG",
+        "version": 2,
+        "region": "SG+JP",
         "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "candidate_fingerprint": candidate_hash,
+        "generated_at": generated_at,
+        "candidate_fingerprint": sg_hash,
+        "jp_candidate_fingerprint": jp_hash,
         "measurement_id": MEASUREMENT_ID,
-        "full_measurement": full,
-        "slots": output,
+        "full_measurement": sg_full or jp_full,
+        "regions": {
+            "SG": {
+                "candidate_fingerprint": sg_hash,
+                "full_measurement": sg_full,
+                "slots": output_slots(sg_slots, "SG"),
+            },
+            "JP": {
+                "candidate_fingerprint": jp_hash,
+                "full_measurement": jp_full,
+                "slots": output_slots(jp_slots, "JP"),
+            },
+        },
+        "slots": output_slots(sg_slots, "SG"),
+        "jp_slots": output_slots(jp_slots, "JP"),
     }
 
 
 def main():
-    candidates = parse_candidates(fetch_subscription())
-    if not candidates:
-        raise RuntimeError("no SG VLESS nodes found in subscription")
-    candidate_hash = fingerprint(candidates)
+    subscription = fetch_subscription()
+    sg_candidates = parse_candidates(subscription, "SG")
+    jp_candidates = parse_candidates(subscription, "JP")
     old_state = load_state()
-    full = old_state.get("candidate_fingerprint") != candidate_hash or len(old_state.get("slots", [])) < 5
-    full = full or old_state.get("measurement_id") != MEASUREMENT_ID
-    if full:
-        slots = measure_full_candidates(candidates)
-        if len(slots) < 5:
-            raise RuntimeError(f"only {len(slots)} SG nodes completed proxy speed tests")
-    else:
-        slots = incremental_slots(candidates, old_state)
-        if slots is None:
-            full = True
-            old_state = {}
-            slots = measure_full_candidates(candidates)
-            if len(slots) < 5:
-                raise RuntimeError(f"only {len(slots)} SG nodes completed proxy speed tests")
-    payload = ranking_payload(slots, candidate_hash, full)
+    sg_slots, sg_hash, sg_full = optimize_region(
+        "SG", sg_candidates, state_for_region(old_state, "SG")
+    )
+    jp_slots, jp_hash, jp_full = optimize_region(
+        "JP", jp_candidates, state_for_region(old_state, "JP")
+    )
+    payload = ranking_payload(sg_slots, sg_hash, sg_full, jp_slots, jp_hash, jp_full)
     save_state({
-        "candidate_fingerprint": candidate_hash,
-        "measurement_id": MEASUREMENT_ID,
-        "slots": slots,
+        "version": 2,
+        "sg": {
+            "candidate_fingerprint": sg_hash,
+            "measurement_id": MEASUREMENT_ID,
+            "full_measurement": sg_full,
+            "slots": sg_slots,
+        },
+        "jp": {
+            "candidate_fingerprint": jp_hash,
+            "measurement_id": MEASUREMENT_ID,
+            "full_measurement": jp_full,
+            "slots": jp_slots,
+        },
         "updated_at": payload["generated_at"],
     })
     RANKING_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-
-
-def main_full(candidates, candidate_hash):
-    old = load_state()
-    old["candidate_fingerprint"] = ""
-    save_state(old)
-    return main()
 
 
 if __name__ == "__main__":
