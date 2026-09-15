@@ -2,45 +2,45 @@
   "version": 2,
   "region": "SG+JP",
   "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
-  "generated_at": "2026-09-15T06:14:45.246696+00:00",
-  "candidate_fingerprint": "6ac2cc74057b48a2dd0f6ad6604377c8d7ddbb8e432c2398395da3fe70325990",
-  "jp_candidate_fingerprint": "039c5ad8b4c72cb11c7d0ac3bf1d0ad3d534984c0f53e64e4004c19d8a253d41",
+  "generated_at": "2026-09-15T07:14:02.502033+00:00",
+  "candidate_fingerprint": "786b18b060b8977fd68513ba30b00389ca491ceadf7fab75366d0b0fb62229ca",
+  "jp_candidate_fingerprint": "f9b1e7ea9ffdcb4540c402bd2ad80300b1e9b20264114bb6cfaf2e9605cb1a9c",
   "measurement_id": "d6c4ab563139f99e988d2bf0b9ba87668d13a531a2e7d5ca4a3bf53d6422ff16",
   "full_measurement": true,
   "regions": {
     "SG": {
-      "candidate_fingerprint": "6ac2cc74057b48a2dd0f6ad6604377c8d7ddbb8e432c2398395da3fe70325990",
+      "candidate_fingerprint": "786b18b060b8977fd68513ba30b00389ca491ceadf7fab75366d0b0fb62229ca",
       "full_measurement": true,
       "slots": [
         {
           "rank": 1,
-          "name": "AAA-SG55",
-          "source_name": "SG55",
-          "address": "52.221.158.37",
-          "port": 443,
-          "tcp_ms": 88.71,
-          "speed_bps": 3337766.39,
-          "measured_at": "2026-09-15T06:12:39.795515+00:00"
-        },
-        {
-          "rank": 2,
-          "name": "BBB-SG24",
+          "name": "AAA-SG24",
           "source_name": "SG24",
           "address": "13.212.207.124",
           "port": 443,
-          "tcp_ms": 76.51,
-          "speed_bps": 3277954.97,
-          "measured_at": "2026-09-15T06:12:39.795515+00:00"
+          "tcp_ms": 77.48,
+          "speed_bps": 3221258.46,
+          "measured_at": "2026-09-15T07:13:00.154870+00:00"
+        },
+        {
+          "rank": 2,
+          "name": "BBB-SG55",
+          "source_name": "SG55",
+          "address": "52.221.158.37",
+          "port": 443,
+          "tcp_ms": 83.3,
+          "speed_bps": 3147208.76,
+          "measured_at": "2026-09-15T07:13:00.154870+00:00"
         },
         {
           "rank": 3,
-          "name": "CCC-SG24",
-          "source_name": "SG24",
-          "address": "18.139.30.198",
+          "name": "CCC-SG56",
+          "source_name": "SG56",
+          "address": "52.74.228.235",
           "port": 443,
-          "tcp_ms": 67.27,
-          "speed_bps": 3227598.04,
-          "measured_at": "2026-09-15T06:12:39.795515+00:00"
+          "tcp_ms": 66.79,
+          "speed_bps": 3071864.63,
+          "measured_at": "2026-09-15T07:13:00.154870+00:00"
         },
         {
           "rank": 4,
@@ -48,55 +48,55 @@
           "source_name": "SG57",
           "address": "54.169.146.255",
           "port": 443,
-          "tcp_ms": 76.14,
-          "speed_bps": 3188622.14,
-          "measured_at": "2026-09-15T06:12:39.795515+00:00"
+          "tcp_ms": 66.39,
+          "speed_bps": 2996380.89,
+          "measured_at": "2026-09-15T07:13:00.154870+00:00"
         },
         {
           "rank": 5,
-          "name": "SG56",
-          "source_name": "SG56",
-          "address": "52.74.228.235",
+          "name": "SG24",
+          "source_name": "SG24",
+          "address": "18.139.30.198",
           "port": 443,
-          "tcp_ms": 69.02,
-          "speed_bps": 3035193.83,
-          "measured_at": "2026-09-15T06:12:39.795515+00:00"
+          "tcp_ms": 70.44,
+          "speed_bps": 2942767.19,
+          "measured_at": "2026-09-15T07:13:00.154870+00:00"
         }
       ]
     },
     "JP": {
-      "candidate_fingerprint": "039c5ad8b4c72cb11c7d0ac3bf1d0ad3d534984c0f53e64e4004c19d8a253d41",
+      "candidate_fingerprint": "f9b1e7ea9ffdcb4540c402bd2ad80300b1e9b20264114bb6cfaf2e9605cb1a9c",
       "full_measurement": true,
       "slots": [
         {
           "rank": 1,
-          "name": "AAA-JP35",
-          "source_name": "JP35",
-          "address": "47.79.35.185",
-          "port": 443,
-          "tcp_ms": 70.23,
-          "speed_bps": 1931237.46,
-          "measured_at": "2026-09-15T06:14:45.246043+00:00"
-        },
-        {
-          "rank": 2,
-          "name": "BBB-JP56",
-          "source_name": "JP56",
-          "address": "216.23.122.8",
-          "port": 443,
-          "tcp_ms": 70.11,
-          "speed_bps": 1900689.6,
-          "measured_at": "2026-09-15T06:14:45.246043+00:00"
-        },
-        {
-          "rank": 3,
-          "name": "JP44",
+          "name": "AAA-JP44",
           "source_name": "JP44",
           "address": "8.216.44.94",
           "port": 443,
-          "tcp_ms": 60.71,
-          "speed_bps": 1801098.27,
-          "measured_at": "2026-09-15T06:14:45.246043+00:00"
+          "tcp_ms": 63.13,
+          "speed_bps": 2368075.19,
+          "measured_at": "2026-09-15T07:14:02.501328+00:00"
+        },
+        {
+          "rank": 2,
+          "name": "BBB-JP39",
+          "source_name": "JP39",
+          "address": "8.211.145.92",
+          "port": 443,
+          "tcp_ms": 63.29,
+          "speed_bps": 2125106.18,
+          "measured_at": "2026-09-15T07:14:02.501328+00:00"
+        },
+        {
+          "rank": 3,
+          "name": "JP4",
+          "source_name": "JP4",
+          "address": "35.74.79.196",
+          "port": 443,
+          "tcp_ms": 80.81,
+          "speed_bps": 1499666.23,
+          "measured_at": "2026-09-15T07:14:02.501328+00:00"
         }
       ]
     }
@@ -104,33 +104,33 @@
   "slots": [
     {
       "rank": 1,
-      "name": "AAA-SG55",
-      "source_name": "SG55",
-      "address": "52.221.158.37",
-      "port": 443,
-      "tcp_ms": 88.71,
-      "speed_bps": 3337766.39,
-      "measured_at": "2026-09-15T06:12:39.795515+00:00"
-    },
-    {
-      "rank": 2,
-      "name": "BBB-SG24",
+      "name": "AAA-SG24",
       "source_name": "SG24",
       "address": "13.212.207.124",
       "port": 443,
-      "tcp_ms": 76.51,
-      "speed_bps": 3277954.97,
-      "measured_at": "2026-09-15T06:12:39.795515+00:00"
+      "tcp_ms": 77.48,
+      "speed_bps": 3221258.46,
+      "measured_at": "2026-09-15T07:13:00.154870+00:00"
+    },
+    {
+      "rank": 2,
+      "name": "BBB-SG55",
+      "source_name": "SG55",
+      "address": "52.221.158.37",
+      "port": 443,
+      "tcp_ms": 83.3,
+      "speed_bps": 3147208.76,
+      "measured_at": "2026-09-15T07:13:00.154870+00:00"
     },
     {
       "rank": 3,
-      "name": "CCC-SG24",
-      "source_name": "SG24",
-      "address": "18.139.30.198",
+      "name": "CCC-SG56",
+      "source_name": "SG56",
+      "address": "52.74.228.235",
       "port": 443,
-      "tcp_ms": 67.27,
-      "speed_bps": 3227598.04,
-      "measured_at": "2026-09-15T06:12:39.795515+00:00"
+      "tcp_ms": 66.79,
+      "speed_bps": 3071864.63,
+      "measured_at": "2026-09-15T07:13:00.154870+00:00"
     },
     {
       "rank": 4,
@@ -138,51 +138,51 @@
       "source_name": "SG57",
       "address": "54.169.146.255",
       "port": 443,
-      "tcp_ms": 76.14,
-      "speed_bps": 3188622.14,
-      "measured_at": "2026-09-15T06:12:39.795515+00:00"
+      "tcp_ms": 66.39,
+      "speed_bps": 2996380.89,
+      "measured_at": "2026-09-15T07:13:00.154870+00:00"
     },
     {
       "rank": 5,
-      "name": "SG56",
-      "source_name": "SG56",
-      "address": "52.74.228.235",
+      "name": "SG24",
+      "source_name": "SG24",
+      "address": "18.139.30.198",
       "port": 443,
-      "tcp_ms": 69.02,
-      "speed_bps": 3035193.83,
-      "measured_at": "2026-09-15T06:12:39.795515+00:00"
+      "tcp_ms": 70.44,
+      "speed_bps": 2942767.19,
+      "measured_at": "2026-09-15T07:13:00.154870+00:00"
     }
   ],
   "jp_slots": [
     {
       "rank": 1,
-      "name": "AAA-JP35",
-      "source_name": "JP35",
-      "address": "47.79.35.185",
-      "port": 443,
-      "tcp_ms": 70.23,
-      "speed_bps": 1931237.46,
-      "measured_at": "2026-09-15T06:14:45.246043+00:00"
-    },
-    {
-      "rank": 2,
-      "name": "BBB-JP56",
-      "source_name": "JP56",
-      "address": "216.23.122.8",
-      "port": 443,
-      "tcp_ms": 70.11,
-      "speed_bps": 1900689.6,
-      "measured_at": "2026-09-15T06:14:45.246043+00:00"
-    },
-    {
-      "rank": 3,
-      "name": "JP44",
+      "name": "AAA-JP44",
       "source_name": "JP44",
       "address": "8.216.44.94",
       "port": 443,
-      "tcp_ms": 60.71,
-      "speed_bps": 1801098.27,
-      "measured_at": "2026-09-15T06:14:45.246043+00:00"
+      "tcp_ms": 63.13,
+      "speed_bps": 2368075.19,
+      "measured_at": "2026-09-15T07:14:02.501328+00:00"
+    },
+    {
+      "rank": 2,
+      "name": "BBB-JP39",
+      "source_name": "JP39",
+      "address": "8.211.145.92",
+      "port": 443,
+      "tcp_ms": 63.29,
+      "speed_bps": 2125106.18,
+      "measured_at": "2026-09-15T07:14:02.501328+00:00"
+    },
+    {
+      "rank": 3,
+      "name": "JP4",
+      "source_name": "JP4",
+      "address": "35.74.79.196",
+      "port": 443,
+      "tcp_ms": 80.81,
+      "speed_bps": 1499666.23,
+      "measured_at": "2026-09-15T07:14:02.501328+00:00"
     }
   ]
 }
