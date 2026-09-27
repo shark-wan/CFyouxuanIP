@@ -19,6 +19,7 @@ TEST_BYTES=${CFY_TEST_BYTES:-8388608}
 POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
 GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
+AUTO_PROXY=${CFY_AUTO_PROXY:-1}
 STATE=$BASE/state.tsv
 AGGREGATE=$BASE/ip.aggregate.txt
 REACHABLE=$BASE/reachable.tsv
@@ -205,6 +206,42 @@ speed_probe() {
     printf '%s' "$bps"
 }
 
+prepare_github_proxy() {
+    [ -n "$GITHUB_PROXY" ] || [ "$AUTO_PROXY" = 1 ] || return 0
+    [ -n "$GITHUB_PROXY" ] && return 0
+    proxy_port=${CFY_PROXY_PORT:-10808}
+    proxy_pid_file=$BASE/github-proxy.pid
+    if [ -s "$proxy_pid_file" ]; then
+        proxy_pid=$(cat "$proxy_pid_file")
+        if kill -0 "$proxy_pid" 2>/dev/null; then
+            GITHUB_PROXY="socks5h://127.0.0.1:$proxy_port"
+            return 0
+        fi
+    fi
+    proxy_uri=''
+    if [ -s "$STATE" ]; then
+        IFS='	' read -r proxy_host proxy_node_port proxy_name proxy_latency proxy_speed < "$STATE"
+        proxy_uri=$(find_uri "$proxy_host" "$proxy_node_port" || true)
+    fi
+    [ -n "$proxy_uri" ] || proxy_uri=$(grep -E '^vless://.*#.*(SG|JP)' "$SUBSCRIPTION" | head -n 1 || true)
+    [ -n "$proxy_uri" ] || return 0
+    proxy_cfg=$BASE/github-proxy.json
+    write_xray_config "$proxy_uri" "$proxy_port" "$proxy_cfg" || return 0
+    "$XRAY" run -c "$proxy_cfg" >/dev/null 2>&1 &
+    proxy_pid=$!
+    i=0
+    while [ "$i" -lt 50 ]; do
+        if nc -n -w 1 127.0.0.1 "$proxy_port" </dev/null >/dev/null 2>&1; then
+            printf '%s' "$proxy_pid" > "$proxy_pid_file"
+            GITHUB_PROXY="socks5h://127.0.0.1:$proxy_port"
+            return 0
+        fi
+        sleep 0.1; i=$((i + 1))
+    done
+    kill "$proxy_pid" >/dev/null 2>&1 || true
+    return 0
+}
+
 canonical() {
     printf '%s' "$1" | sed -e 's/^[Aa][Aa][Aa]-//' -e 's/^[Bb][Bb][Bb]-//' \
         -e 's/^[Cc][Cc][Cc]-//' -e 's/^[Dd][Dd][Dd]-//' -e 's/^[Ee][Ee][Ee]-//'
@@ -315,8 +352,9 @@ incremental_measurement() {
 }
 
 run_once() {
-    fetch_aggregate || { log 'aggregate fetch failed'; return 1; }
     fetch_subscription || { log 'subscription fetch failed'; return 1; }
+    prepare_github_proxy
+    fetch_aggregate || { log 'aggregate fetch failed'; return 1; }
     aggregate_hash=$(sha256sum "$AGGREGATE" | awk '{print $1}')
     reachable_count=$(probe_aggregate)
     [ "$reachable_count" -gt 0 ] || { log 'no reachable nodes'; return 1; }

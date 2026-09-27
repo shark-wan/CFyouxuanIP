@@ -17,6 +17,7 @@ pwsh -File scripts/install_android.ps1 `
 ```
 
 `-GitHubProxy` 可填写已经部署的 HTTP 或 SOCKS5 代理；它只用于 GitHub raw/API 请求和提交，不会改变节点 TCP 测试或 Xray 下载测速。
+如果省略该参数，安装器默认启用自动代理：设备先直连订阅，随后用上一轮第 1 名（首次使用时用订阅中的首个 SG/JP 节点）启动本机 `127.0.0.1:10808` SOCKS5，再通过该代理访问 GitHub。
 
 守护程序每小时提交 `ip.txt` 和 `device-status.json`。`device-status.json` 超过 90 分钟没有更新时，`.github/workflows/device-fallback.yml` 会在 GitHub runner 上执行 TCP 筛选和测速；设置仓库 Secret `CF_SUB_URL` 后兜底也能使用 Xray 订阅测速，没有该 Secret 时仍会发布 TCP 可达列表。
 
