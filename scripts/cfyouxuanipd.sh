@@ -155,7 +155,7 @@ write_xray_config() {
     uri=$1; socks=$2; output=$3
     auth=${uri#vless://}; uuid=${auth%@*}; rest=${auth#*@}
     endpoint=${rest%%\?*}; queryfrag=${rest#*\?}; query=${queryfrag%%#*}
-    host=${endpoint%:*}; port=${endpoint##*:}
+    host=${endpoint%:*}; node_port=${endpoint##*:}
     security=$(param "$query" security); [ -n "$security" ] || security=none
     network=$(param "$query" type); [ -n "$network" ] || network=tcp
     sni=$(url_decode "$(param "$query" sni)")
@@ -191,26 +191,29 @@ write_xray_config() {
         stream="$stream,$ws"
     fi
     cat > "$output" <<EOF
-{"log":{"loglevel":"error"},"inbounds":[{"listen":"127.0.0.1","port":$socks,"protocol":"socks","settings":{"udp":false}}],"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"$(json_escape "$host")","port":$port,"users":[{"id":"$(json_escape "$uuid")","encryption":"none"}]}]},"streamSettings":{$stream}},{"protocol":"freedom"}]}
+{"log":{"loglevel":"error"},"inbounds":[{"listen":"127.0.0.1","port":$socks,"protocol":"socks","settings":{"udp":false}}],"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"$(json_escape "$host")","port":$node_port,"users":[{"id":"$(json_escape "$uuid")","encryption":"none"}]}]},"streamSettings":{$stream}},{"protocol":"freedom"}]}
 EOF
 }
 
 speed_probe() {
     uri=$1
-    port=$((18080 + ($$ % 1000)))
+    socks_port=$((18080 + ($$ % 1000)))
     cfg=$BASE/xray-speed.json
-    write_xray_config "$uri" "$port" "$cfg" || return 1
-    "$XRAY" run -c "$cfg" >/dev/null 2>&1 &
+    write_xray_config "$uri" "$socks_port" "$cfg" || return 1
+    "$XRAY" run -c "$cfg" >"$BASE/speed-xray.log" 2>&1 &
     xpid=$!
     ready=0
     i=0
     while [ "$i" -lt 50 ]; do
-        if nc -n -w 1 127.0.0.1 "$port" </dev/null >/dev/null 2>&1; then ready=1; break; fi
+        if nc -n -w 1 127.0.0.1 "$socks_port" </dev/null >/dev/null 2>&1; then ready=1; break; fi
         sleep 0.1; i=$((i + 1))
     done
     result=''
     if [ "$ready" -eq 1 ]; then
-        result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
+        result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
+        log "speed curl endpoint=$socks_port result=$result"
+    else
+        log "speed xray not ready endpoint=$socks_port"
     fi
     kill "$xpid" >/dev/null 2>&1 || true
     wait "$xpid" 2>/dev/null || true
@@ -404,6 +407,12 @@ run_once() {
 
 case "${1:-daemon}" in
     once) run_once ;;
+    debug)
+        fetch_subscription || exit 1
+        debug_uri=$(find_uri "14.137.229.163" 443 || true)
+        [ -n "$debug_uri" ] || exit 1
+        speed_probe "$debug_uri"
+        ;;
     daemon)
         while :; do
             run_once || true
