@@ -1,0 +1,51 @@
+name: Android heartbeat fallback
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cfyouxuanip-main
+  cancel-in-progress: false
+
+jobs:
+  fallback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Android heartbeat
+        id: guard
+        run: |
+          python scripts/heartbeat_guard.py | tee /tmp/heartbeat.txt
+          cat /tmp/heartbeat.txt >> "$GITHUB_OUTPUT"
+      - name: Install Python and Xray dependencies
+        if: steps.guard.outputs.stale == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq unzip
+          curl -fsSL -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          unzip -oq /tmp/xray.zip -d /tmp/xray
+      - name: Apply fallback TCP and speed ranking
+        if: steps.guard.outputs.stale == 'true'
+        env:
+          SG_SUB_URL: ${{ secrets.CF_SUB_URL }}
+          XRAY_BIN: /tmp/xray/xray
+          SG_TEST_URL: https://proof.ovh.net/files/10Mb.dat
+          SG_TEST_BYTES: "8388608"
+        run: python scripts/fallback_ip.py
+      - name: Commit fallback result
+        if: steps.guard.outputs.stale == 'true'
+        run: |
+          if git diff --quiet -- ip.txt; then
+            echo "fallback did not change ip.txt"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ip.txt
+          git commit -m "Fallback ranking while Android is offline"
+          git push

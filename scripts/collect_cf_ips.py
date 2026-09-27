@@ -19,12 +19,13 @@ SOURCES = (
     "sub.xdu.qzz.io",
 )
 
-REGION_ORDER = ("HK", "SG", "MY", "JP")
+REGION_ORDER = ("HK", "JP", "KR", "SG", "MY")
 REGION_WORDS = {
     "HK": ("HK", "HONG KONG", "\u9999\u6e2f", "\U0001f1ed\U0001f1f0"),
+    "JP": ("JP", "JAPAN", "\u65e5\u672c", "\U0001f1ef\U0001f1f5"),
+    "KR": ("KR", "KOREA", "SOUTH KOREA", "\ud55c\uad6d", "\ub300\ud55c\ubbfc\uad6d", "\U0001f1f0\U0001f1f7"),
     "SG": ("SG", "SINGAPORE", "\u65b0\u52a0\u5761", "\U0001f1f8\U0001f1ec"),
     "MY": ("MY", "MALAYSIA", "\u9a6c\u6765", "\U0001f1f2\U0001f1fe"),
-    "JP": ("JP", "JAPAN", "\u65e5\u672c", "\U0001f1ef\U0001f1f5"),
 }
 
 UA = "v2rayN/edgetunnel (https://github.com/cmliu/edgetunnel)"
@@ -111,7 +112,9 @@ def collect():
 
 
 def main():
-    Path("ip.txt").write_text(collect(), encoding="utf-8")
+    # Keep the upstream aggregate separate from the device-produced ip.txt.
+    # The Android worker consumes this file and publishes the filtered result.
+    Path("ip.aggregate.txt").write_text(collect(), encoding="utf-8")
 
 
 if __name__ == "__main__":

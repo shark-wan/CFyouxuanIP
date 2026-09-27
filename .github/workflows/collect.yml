@@ -21,16 +21,16 @@ jobs:
           python-version: "3.x"
       - name: Collect nodes
         run: python scripts/collect_cf_ips.py
-      - name: Apply local SG and JP ranking
-        run: python scripts/apply_sg_ranking.py
-      - name: Commit ip.txt
+      - name: Verify aggregate output
+        run: test -f ip.aggregate.txt
+      - name: Commit aggregate
         run: |
-          if git diff --quiet -- ip.txt; then
-            echo "ip.txt unchanged"
+          if git diff --quiet -- ip.aggregate.txt; then
+            echo "ip.aggregate.txt unchanged"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ip.txt
-          git commit -m "Update optimized IP list"
+          git add ip.aggregate.txt
+          git commit -m "Update upstream IP aggregate"
           git push
