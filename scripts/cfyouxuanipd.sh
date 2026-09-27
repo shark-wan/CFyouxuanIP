@@ -20,6 +20,7 @@ POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
 GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
 AUTO_PROXY=${CFY_AUTO_PROXY:-1}
+AUTO_PROXY_BOOTSTRAP=${CFY_AUTO_PROXY_BOOTSTRAP:-0}
 STATE=$BASE/state.tsv
 AGGREGATE=$BASE/ip.aggregate.txt
 REACHABLE=$BASE/reachable.tsv
@@ -45,8 +46,8 @@ url_decode() {
     printf '%s' "$1" | sed \
         -e 's/%7B/{/g' -e 's/%7b/{/g' -e 's/%7D/}/g' -e 's/%7d/}/g' \
         -e 's/%22/"/g' -e 's/%3A/:/g' -e 's/%3a/:/g' -e 's/%2C/,/g' -e 's/%2c/,/g' \
-        -e 's/%2F/\\//g' -e 's/%2f/\\//g' -e 's/%3F/?/g' -e 's/%3f/?/g' \
-        -e 's/%3D/=/g' -e 's/%3d/=/g' -e 's/%26/\\&/g' -e 's/%25/%/g'
+        -e 's#%2F#/#g' -e 's#%2f#/#g' -e 's#%3F#?#g' -e 's#%3f#?#g' \
+        -e 's#%3D#=#g' -e 's#%3d#=#g' -e 's#%26#\\&#g' -e 's#%25#%#g'
 }
 
 param() {
@@ -61,7 +62,7 @@ endpoint_key() { printf '%s:%s' "$1" "$2"; }
 
 github_curl() {
     if [ -n "$GITHUB_PROXY" ]; then
-        curl --proxy "$GITHUB_PROXY" "$@"
+        curl --proxy "$GITHUB_PROXY" "$@" || curl "$@"
     else
         curl "$@"
     fi
@@ -149,6 +150,7 @@ write_xray_config() {
     transport_host=$(url_decode "$(param "$query" host)")
     mode=$(url_decode "$(param "$query" mode)")
     extra=$(url_decode "$(param "$query" extra)")
+    log "proxy candidate endpoint=$endpoint security=$security network=$network host=$transport_host path=$path"
     host_json=$(json_escape "$transport_host"); path_json=$(json_escape "$path")
     sni_json=$(json_escape "$sni"); fp_json=$(json_escape "$fp")
     stream="\"network\":\"$(json_escape "$network")\",\"security\":\"$(json_escape "$security")\""
@@ -223,6 +225,7 @@ prepare_github_proxy() {
         IFS='	' read -r proxy_host proxy_node_port proxy_name proxy_latency proxy_speed < "$STATE"
         proxy_uri=$(find_uri "$proxy_host" "$proxy_node_port" || true)
     fi
+    [ -n "$proxy_uri" ] || [ "$AUTO_PROXY_BOOTSTRAP" = 1 ] || return 0
     [ -n "$proxy_uri" ] || proxy_uri=$(grep -E '^vless://.*#.*(SG|JP)' "$SUBSCRIPTION" | head -n 1 || true)
     [ -n "$proxy_uri" ] || return 0
     proxy_cfg=$BASE/github-proxy.json
@@ -311,6 +314,7 @@ full_measurement() {
     while IFS='	' read -r host port name latency; do
         [ -n "$host" ] || continue
         uri=$(find_uri "$host" "$port" || true)
+        log "speed candidate $host:$port uri=$([ -n "$uri" ] && echo yes || echo no)"
         [ -n "$uri" ] || continue
         speed=$(speed_probe "$uri" || true)
         if [ -n "$speed" ]; then
@@ -353,7 +357,7 @@ incremental_measurement() {
 
 run_once() {
     fetch_subscription || { log 'subscription fetch failed'; return 1; }
-    prepare_github_proxy
+    if [ -s "$STATE" ]; then prepare_github_proxy; fi
     fetch_aggregate || { log 'aggregate fetch failed'; return 1; }
     aggregate_hash=$(sha256sum "$AGGREGATE" | awk '{print $1}')
     reachable_count=$(probe_aggregate)
@@ -367,6 +371,9 @@ run_once() {
         speed_count=$(incremental_measurement)
     fi
     printf '%s' "$aggregate_hash" > "$BASE/aggregate.sha256"
+    # The first complete pass now has a measured rank-1 node.  Start the
+    # device Xray proxy from that node before committing to GitHub.
+    prepare_github_proxy
     github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($mode)" || log 'ip.txt upload failed'
     write_status "$mode" "$reachable_count" "$speed_count" "$aggregate_hash" || log 'heartbeat upload failed'
     log "$mode complete: reachable=$reachable_count speed_tests=$speed_count"
