@@ -18,6 +18,7 @@ TEST_URL=${CFY_TEST_URL:-https://proof.ovh.net/files/10Mb.dat}
 TEST_BYTES=${CFY_TEST_BYTES:-8388608}
 POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
+GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
 STATE=$BASE/state.tsv
 AGGREGATE=$BASE/ip.aggregate.txt
 REACHABLE=$BASE/reachable.tsv
@@ -57,6 +58,14 @@ json_escape() {
 
 endpoint_key() { printf '%s:%s' "$1" "$2"; }
 
+github_curl() {
+    if [ -n "$GITHUB_PROXY" ]; then
+        curl --proxy "$GITHUB_PROXY" "$@"
+    else
+        curl "$@"
+    fi
+}
+
 tcp_ms() {
     host=$1; port=$2
     case "$host" in
@@ -77,7 +86,7 @@ tcp_ms() {
 
 fetch_aggregate() {
     tmp=$AGGREGATE.tmp
-    if ! curl -fsSL --connect-timeout 20 --max-time 90 "$RAW?ts=$(date +%s)" -o "$tmp"; then
+    if ! github_curl -fsSL --connect-timeout 20 --max-time 90 "$RAW?ts=$(date +%s)" -o "$tmp"; then
         rm -f "$tmp"
         return 1
     fi
@@ -233,7 +242,7 @@ github_put() {
     [ -n "$TOKEN" ] || return 1
     metadata=$BASE/metadata.json
     headers="$BASE/headers.txt"
-    if ! curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
+    if ! github_curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
         rm -f "$metadata"
         return 1
     fi
@@ -243,7 +252,7 @@ github_put() {
     printf '{"message":"%s","content":"%s"' "$(json_escape "$message")" "$encoded" > "$body"
     [ -n "$sha" ] && printf ',"sha":"%s"' "$sha" >> "$body"
     printf ',"branch":"%s"}\n' "$(json_escape "$BRANCH")" >> "$body"
-    curl -fsSL -X PUT -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' \
+    github_curl -fsSL -X PUT -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' \
         -H 'Content-Type: application/json' --data-binary "@$body" "$API/$path" -o "$headers"
 }
 

@@ -12,8 +12,11 @@ GitHub Action 每 6 小时运行 `scripts/collect_cf_ips.py`，把来源中识�
 pwsh -File scripts/install_android.ps1 `
   -GitHubToken $env:CF_GITHUB_TOKEN `
   -SubscriptionUrl 'https://example.invalid/sub?token=REPLACE_ME' `
+  -GitHubProxy 'socks5h://127.0.0.1:10808' `
   -DeviceId 'your-device-id'
 ```
+
+`-GitHubProxy` 可填写已经部署的 HTTP 或 SOCKS5 代理；它只用于 GitHub raw/API 请求和提交，不会改变节点 TCP 测试或 Xray 下载测速。
 
 守护程序每小时提交 `ip.txt` 和 `device-status.json`。`device-status.json` 超过 90 分钟没有更新时，`.github/workflows/device-fallback.yml` 会在 GitHub runner 上执行 TCP 筛选和测速；设置仓库 Secret `CF_SUB_URL` 后兜底也能使用 Xray 订阅测速，没有该 Secret 时仍会发布 TCP 可达列表。
 

@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)] [string]$SubscriptionUrl,
     [string]$Repo = "shark-wan/CFyouxuanIP",
     [string]$DeviceId = "df8a4a22",
+    [string]$GitHubProxy = "",
     [string]$Adb = ""
 )
 
@@ -31,6 +32,7 @@ CFY_BRANCH='main'
 CFY_GITHUB_TOKEN='$GitHubToken'
 CFY_SUB_URL='$SubscriptionUrl'
 CFY_DEVICE_ID='$DeviceId'
+CFY_GITHUB_PROXY='$GitHubProxy'
 CFY_POLL_SECONDS='3600'
 CFY_TEST_URL='https://proof.ovh.net/files/10Mb.dat'
 CFY_TEST_BYTES='8388608'
