@@ -212,7 +212,6 @@ speed_probe() {
     if [ "$ready" -eq 1 ]; then
         result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
         log "speed curl endpoint=$socks_port result=$result"
-    else
     fi
     kill "$xpid" >/dev/null 2>&1 || true
     wait "$xpid" 2>/dev/null || true
