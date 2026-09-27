@@ -9,7 +9,7 @@ GitHub Action 每 6 小时运行 `scripts/collect_cf_ips.py`，把来源中识�
 设备需要 root `su`、Android 自带 `curl`/`nc`，以及 arm64。安装器会下载 Xray、写入 root 私有配置，并安装 `/data/adb/service.d/cfyouxuanip.sh`，设备重启后自动恢复。GitHub token 和订阅链接只写入设备的 `/data/adb/cfyouxuanip/config.env`，不会进入仓库：
 
 ```powershell
-pwsh -File scripts/install_android.ps1 `
+pwsh -File Android/install_android.ps1 `
   -GitHubToken $env:CF_GITHUB_TOKEN `
   -SubscriptionUrl 'https://example.invalid/sub?token=REPLACE_ME' `
   -BootstrapProxy 'socks5h://127.0.0.1:10808' `

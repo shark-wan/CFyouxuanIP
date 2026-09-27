@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)] [string]$GitHubToken,
     [Parameter(Mandatory = $true)] [string]$SubscriptionUrl,
     [string]$Repo = "shark-wan/CFyouxuanIP",
-    [string]$DeviceId = "df8a4a22",
+    [string]$DeviceId = "android-device",
     [string]$GitHubProxy = "",
     [string]$BootstrapProxy = "",
     [string]$Adb = ""
@@ -27,7 +27,7 @@ $xray = Get-ChildItem -Path $extract -Recurse -File | Where-Object { $_.Name -eq
 if (-not $xray) { throw "The Xray release did not contain an arm64 xray binary" }
 
 $cfg = Join-Path $work "config.env"
-@"
+$configText = @"
 CFY_REPO='$Repo'
 CFY_BRANCH='main'
 CFY_GITHUB_TOKEN='$GitHubToken'
@@ -40,10 +40,11 @@ CFY_PROXY_PORT='10809'
 CFY_POLL_SECONDS='3600'
 CFY_TEST_URL='https://proof.ovh.net/files/10Mb.dat'
 CFY_TEST_BYTES='131072'
-"@ | Set-Content -LiteralPath $cfg -Encoding ascii
+"@
+[IO.File]::WriteAllText($cfg, $configText, (New-Object Text.ASCIIEncoding))
 
 & $Adb wait-for-device
-& $Adb push (Join-Path $repoRoot "scripts\cfyouxuanipd.sh") /data/local/tmp/cfyouxuanipd.sh | Out-Null
+& $Adb push (Join-Path $repoRoot "Android\cfyouxuanipd.sh") /data/local/tmp/cfyouxuanipd.sh | Out-Null
 & $Adb push $xray.FullName /data/local/tmp/xray | Out-Null
 & $Adb push $cfg /data/local/tmp/cfyouxuanip.env | Out-Null
 & $Adb shell su -c "mkdir -p /data/adb/cfyouxuanip /data/adb/service.d"
@@ -54,16 +55,7 @@ CFY_TEST_BYTES='131072'
 & $Adb shell su -c "chmod 700 /data/adb/cfyouxuanip/xray"
 & $Adb shell su -c "chmod 600 /data/adb/cfyouxuanip/config.env"
 
-$service = @'
-#!/system/bin/sh
-BASE=/data/adb/cfyouxuanip
-if [ -x "$BASE/cfyouxuanipd.sh" ]; then
-    pkill -f "$BASE/cfyouxuanipd.sh" >/dev/null 2>&1 || true
-    nohup "$BASE/cfyouxuanipd.sh" daemon >> "$BASE/worker.log" 2>&1 &
-fi
-'@
-$servicePath = Join-Path $work "service.sh"
-[IO.File]::WriteAllText($servicePath, $service, (New-Object Text.ASCIIEncoding))
+$servicePath = Join-Path $repoRoot "Android\service.sh"
 & $Adb push $servicePath /data/local/tmp/cfyouxuanip-service.sh | Out-Null
 & $Adb shell su -c "cp /data/local/tmp/cfyouxuanip-service.sh /data/adb/service.d/cfyouxuanip.sh"
 & $Adb shell su -c "chmod 700 /data/adb/service.d/cfyouxuanip.sh"

@@ -3,3 +3,6 @@ __pycache__/
 .device-config.env
 subscription.raw
 .v2ray.apk
+Android/config.env
+Android/subscription*
+Android/*.log
