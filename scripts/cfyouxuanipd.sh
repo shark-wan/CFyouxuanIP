@@ -298,17 +298,25 @@ github_put() {
     [ -n "$TOKEN" ] || return 1
     metadata=$BASE/metadata.json
     headers="$BASE/headers.txt"
-    sha=''
-    if github_curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
-        sha=$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata" | head -n 1)
-    fi
     encoded=$(base64 "$file" | tr -d '\n')
     body=$BASE/put.json
-    printf '{"message":"%s","content":"%s"' "$(json_escape "$message")" "$encoded" > "$body"
-    [ -n "$sha" ] && printf ',"sha":"%s"' "$sha" >> "$body"
-    printf ',"branch":"%s"}\n' "$(json_escape "$BRANCH")" >> "$body"
-    github_curl -fsSL -X PUT -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' \
-        -H 'Content-Type: application/json' --data-binary "@$body" "$API/$path" -o "$headers"
+    attempt=0
+    while [ "$attempt" -lt 3 ]; do
+        sha=''
+        if github_curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
+            sha=$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata" | head -n 1)
+        fi
+        printf '{"message":"%s","content":"%s"' "$(json_escape "$message")" "$encoded" > "$body"
+        [ -n "$sha" ] && printf ',"sha":"%s"' "$sha" >> "$body"
+        printf ',"branch":"%s"}\n' "$(json_escape "$BRANCH")" >> "$body"
+        if github_curl -fsSL -X PUT -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' --data-binary "@$body" "$API/$path" -o "$headers"; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 2
+    done
+    return 1
 }
 
 write_status() {
