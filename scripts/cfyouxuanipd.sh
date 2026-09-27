@@ -59,7 +59,7 @@ json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-endpoint_key() { printf '%s:%s' "$1" "$2"; }
+endpoint_key() { printf '%s:%s\n' "$1" "$2"; }
 
 github_curl() {
     if [ -n "$GITHUB_PROXY" ]; then
@@ -163,7 +163,7 @@ write_xray_config() {
     alpn=$(url_decode "$(param "$query" alpn)")
     path=$(url_decode "$(param "$query" path)"); [ -n "$path" ] || path=/
     transport_host=$(url_decode "$(param "$query" host)")
-    mode=$(url_decode "$(param "$query" mode)")
+    transport_mode=$(url_decode "$(param "$query" mode)")
     extra=$(url_decode "$(param "$query" extra)")
     log "proxy candidate endpoint=$endpoint security=$security network=$network host=$transport_host path=$path"
     host_json=$(json_escape "$transport_host"); path_json=$(json_escape "$path")
@@ -180,7 +180,7 @@ write_xray_config() {
     if [ "$network" = xhttp ]; then
         xhttp="\"xhttpSettings\":{\"path\":\"$path_json\""
         [ -n "$transport_host" ] && xhttp="$xhttp,\"host\":\"$host_json\""
-        [ -n "$mode" ] && xhttp="$xhttp,\"mode\":\"$(json_escape "$mode")\""
+        [ -n "$transport_mode" ] && xhttp="$xhttp,\"mode\":\"$(json_escape "$transport_mode")\""
         case "$extra" in \{*\}) xhttp="$xhttp,\"extra\":$extra" ;; esac
         xhttp="$xhttp}"
         stream="$stream,$xhttp"
@@ -200,7 +200,7 @@ speed_probe() {
     socks_port=$((18080 + ($$ % 1000)))
     cfg=$BASE/xray-speed.json
     write_xray_config "$uri" "$socks_port" "$cfg" || return 1
-    "$XRAY" run -c "$cfg" >"$BASE/speed-xray.log" 2>&1 &
+    "$XRAY" run -c "$cfg" >/dev/null 2>&1 &
     xpid=$!
     ready=0
     i=0
@@ -213,7 +213,6 @@ speed_probe() {
         result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
         log "speed curl endpoint=$socks_port result=$result"
     else
-        log "speed xray not ready endpoint=$socks_port"
     fi
     kill "$xpid" >/dev/null 2>&1 || true
     wait "$xpid" 2>/dev/null || true
@@ -331,7 +330,6 @@ full_measurement() {
     while IFS='	' read -r host port name latency; do
         [ -n "$host" ] || continue
         uri=$(find_uri "$host" "$port" || true)
-        log "speed candidate $host:$port uri=$([ -n "$uri" ] && echo yes || echo no)"
         [ -n "$uri" ] || continue
         speed=$(speed_probe "$uri" || true)
         if [ -n "$speed" ]; then
@@ -385,9 +383,9 @@ run_once() {
     reachable_count=$(probe_aggregate)
     [ "$reachable_count" -gt 0 ] || { log 'no reachable nodes'; return 1; }
     old_hash=''; [ -f "$BASE/aggregate.sha256" ] && old_hash=$(cat "$BASE/aggregate.sha256")
-    mode=incremental
+    run_mode=incremental
     if [ "$aggregate_hash" != "$old_hash" ] || [ ! -s "$STATE" ] || [ "$(wc -l < "$STATE")" -lt 5 ]; then
-        mode=full
+        run_mode=full
         speed_count=$(full_measurement)
     else
         speed_count=$(incremental_measurement)
@@ -399,20 +397,14 @@ run_once() {
         GITHUB_PROXY=''
         prepare_github_proxy
     fi
-    github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($mode)" || log 'ip.txt upload failed'
-    write_status "$mode" "$reachable_count" "$speed_count" "$aggregate_hash" || log 'heartbeat upload failed'
-    log "$mode complete: reachable=$reachable_count speed_tests=$speed_count"
+    github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($run_mode)" || log 'ip.txt upload failed'
+    write_status "$run_mode" "$reachable_count" "$speed_count" "$aggregate_hash" || log 'heartbeat upload failed'
+    log "$run_mode complete: reachable=$reachable_count speed_tests=$speed_count"
     return 0
 }
 
 case "${1:-daemon}" in
     once) run_once ;;
-    debug)
-        fetch_subscription || exit 1
-        debug_uri=$(find_uri "14.137.229.163" 443 || true)
-        [ -n "$debug_uri" ] || exit 1
-        speed_probe "$debug_uri"
-        ;;
     daemon)
         while :; do
             run_once || true
