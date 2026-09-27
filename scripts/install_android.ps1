@@ -63,7 +63,7 @@ if [ -x "$BASE/cfyouxuanipd.sh" ]; then
 fi
 '@
 $servicePath = Join-Path $work "service.sh"
-$service | Set-Content -LiteralPath $servicePath -Encoding ascii
+[IO.File]::WriteAllText($servicePath, $service, (New-Object Text.ASCIIEncoding))
 & $Adb push $servicePath /data/local/tmp/cfyouxuanip-service.sh | Out-Null
 & $Adb shell su -c "cp /data/local/tmp/cfyouxuanip-service.sh /data/adb/service.d/cfyouxuanip.sh"
 & $Adb shell su -c "chmod 700 /data/adb/service.d/cfyouxuanip.sh"
