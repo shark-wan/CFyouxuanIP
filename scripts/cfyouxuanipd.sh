@@ -400,7 +400,12 @@ run_once() {
     printf '%s' "$aggregate_hash" > "$BASE/aggregate.sha256"
     # The first complete pass now has a measured rank-1 node.  Start the
     # device Xray proxy from that node before committing to GitHub.
-    if [ "$had_state" -eq 0 ]; then
+    if [ "$run_mode" = full ]; then
+        if [ -s "$BASE/github-proxy.pid" ]; then
+            old_proxy_pid=$(cat "$BASE/github-proxy.pid")
+            kill "$old_proxy_pid" >/dev/null 2>&1 || true
+        fi
+        rm -f "$BASE/github-proxy.pid" "$BASE/github-proxy.json"
         GITHUB_PROXY=''
         prepare_github_proxy
     fi
