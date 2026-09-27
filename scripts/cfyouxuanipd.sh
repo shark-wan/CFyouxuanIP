@@ -15,10 +15,11 @@ TOKEN=${CFY_GITHUB_TOKEN:-}
 SUB_URL=${CFY_SUB_URL:-}
 XRAY=${CFY_XRAY:-$BASE/xray}
 TEST_URL=${CFY_TEST_URL:-https://proof.ovh.net/files/10Mb.dat}
-TEST_BYTES=${CFY_TEST_BYTES:-8388608}
+TEST_BYTES=${CFY_TEST_BYTES:-1048576}
 POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
 GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
+BOOTSTRAP_PROXY=${CFY_BOOTSTRAP_PROXY:-}
 AUTO_PROXY=${CFY_AUTO_PROXY:-1}
 AUTO_PROXY_BOOTSTRAP=${CFY_AUTO_PROXY_BOOTSTRAP:-0}
 STATE=$BASE/state.tsv
@@ -97,7 +98,10 @@ fetch_aggregate() {
 }
 
 probe_aggregate() {
-    : > "$REACHABLE.tmp"
+    probe_dir=$BASE/probes
+    rm -rf "$probe_dir"
+    mkdir -p "$probe_dir"
+    pids=''; index=0; running=0
     while IFS= read -r line || [ -n "$line" ]; do
         line=$(printf '%s' "$line" | tr -d '\r')
         [ -n "$line" ] || continue
@@ -106,12 +110,23 @@ probe_aggregate() {
         case "$address" in *:*) ;; *) continue ;; esac
         host=${address%:*}; port=${address##*:}
         case "$port" in ''|*[!0-9]*) continue ;; esac
-        if latency=$(tcp_ms "$host" "$port"); then
-            printf '%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" >> "$REACHABLE.tmp"
+        index=$((index + 1)); task=$probe_dir/$index
+        (
+            if latency=$(tcp_ms "$host" "$port"); then
+                printf '%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" > "$task"
+            fi
+        ) &
+        pids="$pids $!"; running=$((running + 1))
+        if [ "$running" -ge 32 ]; then
+            for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+            pids=''; running=0
         fi
     done < "$AGGREGATE"
+    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+    : > "$REACHABLE.tmp"
+    cat "$probe_dir"/* > "$REACHABLE.tmp" 2>/dev/null || true
     sort -t '	' -k4,4n "$REACHABLE.tmp" > "$REACHABLE"
-    rm -f "$REACHABLE.tmp"
+    rm -rf "$probe_dir" "$REACHABLE.tmp"
     wc -l < "$REACHABLE" | tr -d ' '
 }
 
@@ -357,7 +372,12 @@ incremental_measurement() {
 
 run_once() {
     fetch_subscription || { log 'subscription fetch failed'; return 1; }
-    if [ -s "$STATE" ]; then prepare_github_proxy; fi
+    had_state=0; [ -s "$STATE" ] && had_state=1
+    if [ "$had_state" -eq 1 ]; then
+        prepare_github_proxy
+    elif [ -n "$BOOTSTRAP_PROXY" ]; then
+        GITHUB_PROXY=$BOOTSTRAP_PROXY
+    fi
     fetch_aggregate || { log 'aggregate fetch failed'; return 1; }
     aggregate_hash=$(sha256sum "$AGGREGATE" | awk '{print $1}')
     reachable_count=$(probe_aggregate)
@@ -373,7 +393,10 @@ run_once() {
     printf '%s' "$aggregate_hash" > "$BASE/aggregate.sha256"
     # The first complete pass now has a measured rank-1 node.  Start the
     # device Xray proxy from that node before committing to GitHub.
-    prepare_github_proxy
+    if [ "$had_state" -eq 0 ]; then
+        GITHUB_PROXY=''
+        prepare_github_proxy
+    fi
     github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($mode)" || log 'ip.txt upload failed'
     write_status "$mode" "$reachable_count" "$speed_count" "$aggregate_hash" || log 'heartbeat upload failed'
     log "$mode complete: reachable=$reachable_count speed_tests=$speed_count"
