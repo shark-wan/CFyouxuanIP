@@ -15,7 +15,7 @@ TOKEN=${CFY_GITHUB_TOKEN:-}
 SUB_URL=${CFY_SUB_URL:-}
 XRAY=${CFY_XRAY:-$BASE/xray}
 TEST_URL=${CFY_TEST_URL:-https://proof.ovh.net/files/10Mb.dat}
-TEST_BYTES=${CFY_TEST_BYTES:-1048576}
+TEST_BYTES=${CFY_TEST_BYTES:-131072}
 POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
 GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
@@ -297,11 +297,10 @@ github_put() {
     [ -n "$TOKEN" ] || return 1
     metadata=$BASE/metadata.json
     headers="$BASE/headers.txt"
-    if ! github_curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
-        rm -f "$metadata"
-        return 1
+    sha=''
+    if github_curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' "$API/$path?ref=$BRANCH" -o "$metadata"; then
+        sha=$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata" | head -n 1)
     fi
-    sha=$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata" | head -n 1)
     encoded=$(base64 "$file" | tr -d '\n')
     body=$BASE/put.json
     printf '{"message":"%s","content":"%s"' "$(json_escape "$message")" "$encoded" > "$body"

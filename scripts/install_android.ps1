@@ -39,7 +39,7 @@ CFY_AUTO_PROXY='1'
 CFY_PROXY_PORT='10809'
 CFY_POLL_SECONDS='3600'
 CFY_TEST_URL='https://proof.ovh.net/files/10Mb.dat'
-CFY_TEST_BYTES='1048576'
+CFY_TEST_BYTES='131072'
 "@ | Set-Content -LiteralPath $cfg -Encoding ascii
 
 & $Adb wait-for-device
