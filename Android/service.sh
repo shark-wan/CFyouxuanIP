@@ -26,19 +26,27 @@ worker_alive() {
     esac
 }
 
-if [ -s "$PIDFILE" ] && worker_alive "$(cat "$PIDFILE" 2>/dev/null)"; then
+start_watchdog() {
+    (
+        while :; do
+            pid=$(cat "$PIDFILE" 2>/dev/null || true)
+            case "$pid" in
+                ''|*[!0-9]*) start_worker ;;
+                *) worker_alive "$pid" || start_worker ;;
+            esac
+            sleep 60
+        done
+    ) >/dev/null 2>&1 &
+    printf '%s' "$!" > "$WATCHDOG" 2>/dev/null || true
+}
+
+if worker_alive "$(cat "$PIDFILE" 2>/dev/null)"; then
+    watchdog=$(cat "$WATCHDOG" 2>/dev/null || true)
+    if [ -n "$watchdog" ] && kill -0 "$watchdog" 2>/dev/null; then
+        exit 0
+    fi
+    start_watchdog
     exit 0
 fi
 start_worker
-
-(
-    while :; do
-        pid=$(cat "$PIDFILE" 2>/dev/null || true)
-        case "$pid" in
-            ''|*[!0-9]*) start_worker ;;
-            *) worker_alive "$pid" || start_worker ;;
-        esac
-        sleep 60
-    done
-) >/dev/null 2>&1 &
-printf '%s' "$!" > "$WATCHDOG" 2>/dev/null || true
+start_watchdog
