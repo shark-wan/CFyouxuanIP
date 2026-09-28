@@ -14,7 +14,19 @@ start_worker() {
     printf '%s' "$!" > "$PIDFILE"
 }
 
-if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
+worker_alive() {
+    pid=$1
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    [ -r "/proc/$pid/cmdline" ] || return 1
+    cmdline=$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    case "$cmdline" in
+        *cfyouxuanipd.sh*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+if [ -s "$PIDFILE" ] && worker_alive "$(cat "$PIDFILE" 2>/dev/null)"; then
     exit 0
 fi
 start_worker
@@ -24,7 +36,7 @@ start_worker
         pid=$(cat "$PIDFILE" 2>/dev/null || true)
         case "$pid" in
             ''|*[!0-9]*) start_worker ;;
-            *) kill -0 "$pid" 2>/dev/null || start_worker ;;
+            *) worker_alive "$pid" || start_worker ;;
         esac
         sleep 60
     done
