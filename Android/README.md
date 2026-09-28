@@ -95,7 +95,7 @@ Android/
    adb shell su -c '/data/adb/cfyouxuanip/cfyouxuanipd.sh once'
    ```
 
-6. 确认 GitHub 上的 `ip.txt` 和 `device-status.json` 更新时间正常。仓库需要设置 `CF_SUB_URL` Secret，供设备离线时的 fallback Action 使用。
+6. 确认 GitHub 上的 `ip.txt` 和 `device-status.json` 更新时间正常。若希望设备离线时由 GitHub runner 继续测速，可把订阅放入仓库私有 Secret `CF_SUB_URL`；不设置时兜底会保留上一份有效排名，不会把未测速的 TCP 列表写进 `ip.txt`。
 
 ## 敏感信息规则
 

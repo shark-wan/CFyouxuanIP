@@ -18,7 +18,7 @@ pwsh -File Android/install_android.ps1 `
 
 `-BootstrapProxy` 只用于首次完整筛选前拉取 GitHub 汇聚文件；首轮完成后，设备用自己的 rank-1 Xray 在 `127.0.0.1:10809` SOCKS5 接管 GitHub raw/API 请求。也可以用 `-GitHubProxy` 指定一个长期外部代理，但这样会跳过设备 Xray 接管。默认测速使用非 Cloudflare 的 OVH 128 KiB 范围下载并换算为字节/秒。
 
-守护程序每小时提交 `ip.txt` 和 `device-status.json`。`device-status.json` 超过 90 分钟没有更新时，`.github/workflows/device-fallback.yml` 会在 GitHub runner 上执行 TCP 筛选和测速；设置仓库 Secret `CF_SUB_URL` 后兜底也能使用 Xray 订阅测速，没有该 Secret 时仍会发布 TCP 可达列表。
+守护程序每小时提交 `ip.txt` 和 `device-status.json`。`device-status.json` 超过 90 分钟没有更新时，`.github/workflows/device-fallback.yml` 会在 GitHub runner 上尝试兜底；只有配置私有的 `CF_SUB_URL` Secret 且完成至少 5 个 SG/JP 下载测速时才会改写 `ip.txt`，否则保留上一份有效的 `AAA`–`EEE` 排名，避免生成没有速率排名的文件。
 
 日志和状态位于设备 `/data/adb/cfyouxuanip/worker.log`、`state.tsv`。手动运行一次可执行：
 
