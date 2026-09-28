@@ -8,7 +8,7 @@
 
 - `cfyouxuanipd.sh`：Android 常驻 worker。
 - `install_android.ps1`：从 Windows 主机通过 ADB 安装 worker 和 Xray。
-- `service.sh`：KernelSU/`/data/adb/service.d` 启动脚本，负责重启后拉起 worker。
+- `service.sh`：KernelSU/`/data/adb/service.d` 启动脚本，负责重启后拉起 worker，并每 60 秒检查 `worker.pid`，在 worker 被系统回收或异常退出时自动重启。
 - Xray arm64：从官方 release 下载到设备的 `/data/adb/cfyouxuanip/xray`，只在设备本地使用，不提交二进制。
 - 私有配置：设备上的 `/data/adb/cfyouxuanip/config.env`，权限为 `0600`。
 

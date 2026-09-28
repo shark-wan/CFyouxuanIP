@@ -50,16 +50,30 @@ def probe(row: tuple[str, int, str]) -> tuple[str, int, str, float] | None:
 
 
 def main() -> None:
+    # A fallback runner must never replace a valid ranked file with an
+    # unranked TCP list.  The subscription is intentionally kept out of the
+    # repository, so an unset or unusable secret is a normal configuration
+    # state.  In that case leave the last Android result intact and let the
+    # next heartbeat restore normal operation.
+    if not os.environ.get("SG_SUB_URL", "").strip():
+        print("fallback skipped: SG_SUB_URL/CF_SUB_URL secret is not configured")
+        return
+
     rows = parse_aggregate()
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(64, max(1, len(rows)))) as pool:
         reachable = [item for item in pool.map(probe, rows) if item]
     reachable.sort(key=lambda item: item[3])
 
-    by_endpoint = {}
-    if os.environ.get("SG_SUB_URL"):
+    try:
         subscription = fetch_subscription()
         candidates = parse_candidates(subscription, "SG") + parse_candidates(subscription, "JP")
-        by_endpoint = {(node["address"], node["port"]): node for node in candidates}
+    except Exception as exc:
+        print(f"fallback skipped: subscription unavailable ({type(exc).__name__})")
+        return
+    by_endpoint = {(node["address"], node["port"]): node for node in candidates}
+    if not by_endpoint:
+        print("fallback skipped: subscription contained no SG/JP candidates")
+        return
     top = [item for item in reachable if (item[0], item[1]) in by_endpoint][:10]
     measured = []
     for host, port, name, tcp_ms in top:
@@ -70,6 +84,9 @@ def main() -> None:
             measured.append((host, port, name, tcp_ms, result["speed_bps"]))
     measured.sort(key=lambda item: (-item[4], item[3]))
     ranked = measured[:5]
+    if len(ranked) < 5:
+        print(f"fallback skipped: only {len(ranked)} SG/JP speed tests completed; keeping last ranked file")
+        return
     ranked_keys = {(host, port) for host, port, *_ in ranked}
 
     labels = ("AAA", "BBB", "CCC", "DDD", "EEE")
