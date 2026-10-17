@@ -39,7 +39,7 @@ CFY_AUTO_PROXY='1'
 CFY_PROXY_PORT='10809'
 CFY_POLL_SECONDS='3600'
 CFY_TEST_URL='https://proof.ovh.net/files/10Mb.dat'
-CFY_TEST_BYTES='131072'
+CFY_TEST_BYTES='1048576'
 "@
 [IO.File]::WriteAllText($cfg, $configText, (New-Object Text.ASCIIEncoding))
 
@@ -59,5 +59,5 @@ $servicePath = Join-Path $repoRoot "Android\service.sh"
 & $Adb push $servicePath /data/local/tmp/cfyouxuanip-service.sh | Out-Null
 & $Adb shell su -c "cp /data/local/tmp/cfyouxuanip-service.sh /data/adb/service.d/cfyouxuanip.sh"
 & $Adb shell su -c "chmod 700 /data/adb/service.d/cfyouxuanip.sh"
-& $Adb shell su -c "/data/adb/cfyouxuanip/cfyouxuanipd.sh once" | Out-Null
 Write-Host "CFyouxuanIP Android worker installed. State: /data/adb/cfyouxuanip"
+Write-Host "Run 'adb shell su -c /data/adb/cfyouxuanip/cfyouxuanipd.sh once' to test"

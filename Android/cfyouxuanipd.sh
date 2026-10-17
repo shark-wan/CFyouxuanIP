@@ -295,6 +295,51 @@ speed_probe() {
     printf '%s' "$median"
 }
 
+stop_github_proxy() {
+    if [ -s "$BASE/github-proxy.pid" ]; then
+        old_proxy_pid=$(cat "$BASE/github-proxy.pid")
+        case "$old_proxy_pid" in
+            ''|*[!0-9]*) ;;
+            *) kill "$old_proxy_pid" >/dev/null 2>&1 || true ;;
+        esac
+    fi
+    rm -f "$BASE/github-proxy.pid" "$BASE/github-proxy.json"
+    GITHUB_PROXY=''
+}
+
+# A live SOCKS listener only proves the tunnel started.  Confirm the tunnel
+# actually reaches GitHub before accepting it, otherwise an AAA node that
+# cannot route to api.github.com would silently block every upload.
+probe_github_proxy() {
+    probe_port=$1
+    curl --proxy "socks5h://127.0.0.1:$probe_port" -fsS \
+        --connect-timeout 8 --max-time 25 -o /dev/null \
+        https://api.github.com/rate_limit >/dev/null 2>&1
+}
+
+# Walk the ranked endpoints in order, then the remaining reachable nodes, and
+# keep the first tunnel that both listens and reaches GitHub.  This is the
+# upload retreat: AAA -> BBB -> CCC -> DDD -> EEE -> secondary candidates.
+proxy_candidate_uris() {
+    secondary=0
+    [ -s "$STATE" ] && while IFS='	' read -r cur_host cur_port cur_name cur_latency cur_speed; do
+        [ -n "$cur_host" ] || continue
+        cur_uri=$(find_uri "$cur_host" "$cur_port" || true)
+        [ -n "$cur_uri" ] && printf '%s\n' "$cur_uri"
+    done < "$STATE"
+    [ -s "$REACHABLE" ] && while IFS='	' read -r cur_host cur_port cur_name cur_latency; do
+        [ -n "$cur_host" ] || continue
+        is_top_endpoint "$(endpoint_key "$cur_host" "$cur_port")" && continue
+        secondary=$((secondary + 1))
+        # A long outage must not walk the whole reachable pool one handshake at
+        # a time.  The first ranked nodes plus the fastest secondary candidates
+        # cover the realistic failure modes.
+        [ "$secondary" -le "${CFY_PROXY_FALLBACK_NODES:-12}" ] || break
+        cur_uri=$(find_uri "$cur_host" "$cur_port" || true)
+        [ -n "$cur_uri" ] && printf '%s\n' "$cur_uri"
+    done < "$REACHABLE"
+}
+
 prepare_github_proxy() {
     [ -n "$GITHUB_PROXY" ] || [ "$AUTO_PROXY" = 1 ] || return 0
     [ -n "$GITHUB_PROXY" ] && return 0
@@ -302,33 +347,48 @@ prepare_github_proxy() {
     proxy_pid_file=$BASE/github-proxy.pid
     if [ -s "$proxy_pid_file" ]; then
         proxy_pid=$(cat "$proxy_pid_file")
-        if kill -0 "$proxy_pid" 2>/dev/null; then
+        if kill -0 "$proxy_pid" 2>/dev/null && probe_github_proxy "$proxy_port"; then
             GITHUB_PROXY="socks5h://127.0.0.1:$proxy_port"
             return 0
         fi
+        stop_github_proxy
     fi
-    proxy_uri=''
-    if [ -s "$STATE" ]; then
-        IFS='	' read -r proxy_host proxy_node_port proxy_name proxy_latency proxy_speed < "$STATE"
-        proxy_uri=$(find_uri "$proxy_host" "$proxy_node_port" || true)
-    fi
-    [ -n "$proxy_uri" ] || [ "$AUTO_PROXY_BOOTSTRAP" = 1 ] || return 0
-    [ -n "$proxy_uri" ] || proxy_uri=$(grep -E '^vless://.*#.*(SG|JP)' "$SUBSCRIPTION" | head -n 1 || true)
-    [ -n "$proxy_uri" ] || return 0
+    [ -s "$SUBSCRIPTION" ] || return 0
     proxy_cfg=$BASE/github-proxy.json
-    write_xray_config "$proxy_uri" "$proxy_port" "$proxy_cfg" || return 0
-    "$XRAY" run -c "$proxy_cfg" >/dev/null 2>&1 &
-    proxy_pid=$!
-    i=0
-    while [ "$i" -lt 50 ]; do
-        if nc -n -w 1 127.0.0.1 "$proxy_port" </dev/null >/dev/null 2>&1; then
+    attempted=0
+    proxy_uri=$(proxy_candidate_uris) || true
+    [ -n "$proxy_uri" ] || return 0
+    while IFS= read -r candidate_uri; do
+        [ -n "$candidate_uri" ] || continue
+        candidate_endpoint=$(printf '%s' "$candidate_uri" | sed -e 's#^vless://[^@]*@##' -e 's#[/?].*$##')
+        attempted=$((attempted + 1))
+        log "proxy candidate #$attempted endpoint=$candidate_endpoint"
+        write_xray_config "$candidate_uri" "$proxy_port" "$proxy_cfg" || continue
+        "$XRAY" run -c "$proxy_cfg" >/dev/null 2>&1 &
+        proxy_pid=$!
+        i=0
+        listening=0
+        while [ "$i" -lt 50 ]; do
+            if nc -n -w 1 127.0.0.1 "$proxy_port" </dev/null >/dev/null 2>&1; then
+                listening=1
+                break
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+        if [ "$listening" -eq 1 ] && probe_github_proxy "$proxy_port"; then
             printf '%s' "$proxy_pid" > "$proxy_pid_file"
             GITHUB_PROXY="socks5h://127.0.0.1:$proxy_port"
+            log "proxy ready via $candidate_endpoint after $attempted candidate(s)"
             return 0
         fi
-        sleep 0.1; i=$((i + 1))
-    done
-    kill "$proxy_pid" >/dev/null 2>&1 || true
+        kill "$proxy_pid" >/dev/null 2>&1 || true
+        wait "$proxy_pid" 2>/dev/null || true
+    done <<EOF
+$proxy_uri
+EOF
+    log "no usable GitHub proxy after $attempted candidate(s)"
+    rm -f "$proxy_cfg"
     return 0
 }
 
@@ -526,14 +586,11 @@ run_once() {
         printf '%s' "$MEASUREMENT_VERSION" > "$MEASUREMENT_FILE"
     fi
     # The first complete pass now has a measured rank-1 node.  Start the
-    # device Xray proxy from that node before committing to GitHub.
+    # device Xray proxy from that node before committing to GitHub.  Drop the
+    # previous tunnel first: it still points at the node the new ranking may
+    # have just evicted, and reusing it would publish a stale ranking.
     if [ "$run_mode" = full ]; then
-        if [ -s "$BASE/github-proxy.pid" ]; then
-            old_proxy_pid=$(cat "$BASE/github-proxy.pid")
-            kill "$old_proxy_pid" >/dev/null 2>&1 || true
-        fi
-        rm -f "$BASE/github-proxy.pid" "$BASE/github-proxy.json"
-        GITHUB_PROXY=''
+        stop_github_proxy
         prepare_github_proxy
     fi
     github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($run_mode)" || {
