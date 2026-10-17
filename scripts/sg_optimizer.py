@@ -27,7 +27,8 @@ TEST_URL = os.environ.get(
     "SG_TEST_URL",
     "https://proof.ovh.net/files/10Mb.dat",
 )
-TEST_BYTES = int(os.environ.get("SG_TEST_BYTES", "8388608"))
+TEST_BYTES = int(os.environ.get("SG_TEST_BYTES", "1048576"))
+TEST_SAMPLES = int(os.environ.get("SG_TEST_SAMPLES", "2"))
 MEASUREMENT_ID = hashlib.sha256(f"{TEST_URL}\n{TEST_BYTES}\nrange-body-download-v2".encode()).hexdigest()
 RANKING_FILE = ROOT / "sg-ranking.json"
 STATE_FILE = Path(os.environ.get("SG_STATE_FILE", "/var/lib/xray-sg-optimizer/state.json"))
@@ -215,28 +216,36 @@ def speed_probe(node: dict) -> dict:
                     time.sleep(0.1)
             else:
                 return result
-            cmd = [
-                "curl", "--silent", "--show-error", "--fail", "--location",
-                "--proxy", f"socks5h://127.0.0.1:{port}",
-                "--connect-timeout", str(PROXY_TIMEOUT), "--max-time", str(SPEED_TIMEOUT),
-                "--range", f"0-{TEST_BYTES - 1}",
-                "-o", "/dev/null",
-                "-w", "\t".join(("%{size_download}", "%{time_starttransfer}", "%{time_total}")),
-                TEST_URL,
-            ]
-            completed = subprocess.run(cmd, capture_output=True, text=True, timeout=SPEED_TIMEOUT + 5)
-            if completed.returncode == 0:
-                fields = completed.stdout.strip().split("\t")
-                if len(fields) == 3:
-                    size = float(fields[0])
-                    first_byte = float(fields[1])
-                    total_seconds = float(fields[2])
-                    measurement = body_download_rate(size, first_byte, total_seconds)
-                    if measurement:
-                        speed_bps, seconds = measurement
-                        result["speed_bytes"] = int(size)
-                        result["speed_seconds"] = seconds
-                        result["speed_bps"] = speed_bps
+
+            speeds = []
+            for sample in range(TEST_SAMPLES):
+                cmd = [
+                    "curl", "--silent", "--show-error", "--fail", "--location",
+                    "--proxy", f"socks5h://127.0.0.1:{port}",
+                    "--connect-timeout", str(PROXY_TIMEOUT), "--max-time", str(SPEED_TIMEOUT),
+                    "--range", f"0-{TEST_BYTES - 1}",
+                    "-o", "/dev/null",
+                    "-w", "\t".join(("%{size_download}", "%{time_starttransfer}", "%{time_total}")),
+                    TEST_URL,
+                ]
+                completed = subprocess.run(cmd, capture_output=True, text=True, timeout=SPEED_TIMEOUT + 5)
+                if completed.returncode == 0:
+                    fields = completed.stdout.strip().split("\t")
+                    if len(fields) == 3:
+                        size = float(fields[0])
+                        first_byte = float(fields[1])
+                        total_seconds = float(fields[2])
+                        measurement = body_download_rate(size, first_byte, total_seconds)
+                        if measurement:
+                            speed_bps, seconds = measurement
+                            speeds.append(speed_bps)
+
+            if speeds:
+                median_speed = statistics.median(speeds)
+                result["speed_bps"] = median_speed
+                result["speed_bytes"] = TEST_BYTES
+                result["speed_seconds"] = TEST_BYTES / median_speed if median_speed > 0 else 0
+
         except (OSError, subprocess.SubprocessError, ValueError):
             pass
         finally:

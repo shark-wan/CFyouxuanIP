@@ -15,7 +15,8 @@ TOKEN=${CFY_GITHUB_TOKEN:-}
 SUB_URL=${CFY_SUB_URL:-}
 XRAY=${CFY_XRAY:-$BASE/xray}
 TEST_URL=${CFY_TEST_URL:-https://proof.ovh.net/files/10Mb.dat}
-TEST_BYTES=${CFY_TEST_BYTES:-131072}
+TEST_BYTES=${CFY_TEST_BYTES:-1048576}
+TEST_SAMPLES=${CFY_TEST_SAMPLES:-2}
 POLL_SECONDS=${CFY_POLL_SECONDS:-3600}
 TCP_TIMEOUT=${CFY_TCP_TIMEOUT:-4}
 GITHUB_PROXY=${CFY_GITHUB_PROXY:-}
@@ -254,24 +255,44 @@ speed_probe() {
         if nc -n -w 1 127.0.0.1 "$socks_port" </dev/null >/dev/null 2>&1; then ready=1; break; fi
         sleep 0.1; i=$((i + 1))
     done
-    result=''
+
+    speeds=''
     if [ "$ready" -eq 1 ]; then
-        result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_starttransfer}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
-        log "speed curl endpoint=$socks_port result=$result"
+        sample=0
+        while [ "$sample" -lt "$TEST_SAMPLES" ]; do
+            result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_starttransfer}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
+            log "speed curl endpoint=$socks_port sample=$sample result=$result"
+
+            size=${result%%"$TAB"*}
+            remainder=${result#*"$TAB"}
+            first_byte=${remainder%%"$TAB"*}
+            seconds=${remainder#*"$TAB"}
+
+            case "$size" in ''|0|*[!0-9]*) log "speed sample $sample: invalid size"; sample=$((sample + 1)); continue ;; esac
+            case "$first_byte" in ''|*[!0-9.]*) log "speed sample $sample: invalid first_byte"; sample=$((sample + 1)); continue ;; esac
+            case "$seconds" in ''|0|*[!0-9.]*) log "speed sample $sample: invalid seconds"; sample=$((sample + 1)); continue ;; esac
+
+            bps=$(awk -v s="$size" -v f="$first_byte" -v t="$seconds" 'BEGIN { d=t-f; if (d > 0) printf "%.0f", s/d; }')
+            case "$bps" in ''|0|*[!0-9]*) log "speed sample $sample: invalid bps"; sample=$((sample + 1)); continue ;; esac
+
+            speeds="$speeds $bps"
+            sample=$((sample + 1))
+        done
     fi
+
     kill "$xpid" >/dev/null 2>&1 || true
     wait "$xpid" 2>/dev/null || true
     rm -f "$cfg"
-    size=${result%%"$TAB"*}
-    remainder=${result#*"$TAB"}
-    first_byte=${remainder%%"$TAB"*}
-    seconds=${remainder#*"$TAB"}
-    case "$size" in ''|0|*[!0-9]*) return 1 ;; esac
-    case "$first_byte" in ''|*[!0-9.]*) return 1 ;; esac
-    case "$seconds" in ''|0|*[!0-9.]*) return 1 ;; esac
-    bps=$(awk -v s="$size" -v f="$first_byte" -v t="$seconds" 'BEGIN { d=t-f; if (d > 0) printf "%.0f", s/d; }')
-    case "$bps" in ''|0|*[!0-9]*) return 1 ;; esac
-    printf '%s' "$bps"
+
+    # 计算中位数
+    if [ -z "$speeds" ]; then
+        return 1
+    fi
+
+    median=$(printf '%s' "$speeds" | tr ' ' '\n' | grep -v '^$' | sort -n | awk '{a[NR]=$0} END {if (NR%2==1) print a[(NR+1)/2]; else print int((a[NR/2]+a[NR/2+1])/2)}')
+    case "$median" in ''|0|*[!0-9]*) return 1 ;; esac
+
+    printf '%s' "$median"
 }
 
 prepare_github_proxy() {
@@ -418,25 +439,51 @@ full_measurement() {
 incremental_measurement() {
     old=$BASE/old.tsv
     cp "$STATE" "$old"
-    : > "$BASE/challengers.tsv"
-    rank=0
-    speed_count=0
+
+    # 步骤 1: 验证前 5 名存活性
+    log 'incremental: verify top 5 liveness'
+    : > "$BASE/alive.tsv"
     while IFS='	' read -r host port name latency speed; do
-        rank=$((rank + 1))
-        if [ "$rank" -ge 4 ]; then
-            uri=$(find_uri "$host" "$port" || true)
-            new_speed=''
-            [ -n "$uri" ] && new_speed=$(speed_probe "$uri" || true)
-            [ -n "$new_speed" ] && speed_count=$((speed_count + 1)) || new_speed=$speed
-            printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$new_speed" >> "$BASE/challengers.tsv"
+        # TCP ping 验证
+        if timeout 3 nc -4 -n -w 3 "$host" "$port" </dev/null >/dev/null 2>&1; then
+            printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$speed" >> "$BASE/alive.tsv"
+            log "incremental: $host:$port alive"
         else
-            printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$speed" >> "$BASE/challengers.tsv"
+            log "incremental: $host:$port dead, removed"
         fi
     done < "$old"
-    # A challenger can enter the top five only by beating a previous top-three
-    # speed.  Sorting all five also handles both challengers winning together.
-    top3=$(head -n 3 "$old" | awk -F '	' '{print $5}')
-    sort -t '	' -k5,5nr -k4,4n "$BASE/challengers.tsv" | head -n 5 > "$BASE/ranked.tsv"
+
+    alive_count=$(wc -l < "$BASE/alive.tsv" | tr -d ' ')
+    if [ "$alive_count" -lt 3 ]; then
+        log "incremental: only $alive_count nodes alive, triggering full"
+        return 1
+    fi
+
+    # 步骤 2: 对存活节点重新测速
+    : > "$BASE/remeasured.tsv"
+    speed_count=0
+    while IFS='	' read -r host port name latency old_speed; do
+        uri=$(find_uri "$host" "$port" || true)
+        if [ -n "$uri" ]; then
+            new_speed=$(speed_probe "$uri" || true)
+            if [ -n "$new_speed" ]; then
+                speed_count=$((speed_count + 1))
+                printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$new_speed" >> "$BASE/remeasured.tsv"
+                log "incremental: $host:$port remeasured speed=$new_speed"
+            else
+                # 测速失败，保留旧速率
+                printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$old_speed" >> "$BASE/remeasured.tsv"
+                log "incremental: $host:$port speed test failed, keep old speed"
+            fi
+        else
+            # URI 未找到，保留旧速率
+            printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$old_speed" >> "$BASE/remeasured.tsv"
+            log "incremental: $host:$port uri not found, keep old speed"
+        fi
+    done < "$BASE/alive.tsv"
+
+    # 步骤 3: 重新排序
+    sort -t '	' -k5,5nr -k4,4n "$BASE/remeasured.tsv" | head -n 5 > "$BASE/ranked.tsv"
     cp "$BASE/ranked.tsv" "$STATE"
     build_output "$BASE/ranked.tsv"
     printf '%s' "$speed_count"
@@ -467,6 +514,12 @@ run_once() {
         [ "$speed_count" -ge 5 ] || return 1
     else
         speed_count=$(incremental_measurement)
+        if [ "$?" -ne 0 ]; then
+            log 'incremental failed, fallback to full'
+            run_mode=full
+            speed_count=$(full_measurement)
+            [ "$speed_count" -ge 5 ] || return 1
+        fi
     fi
     printf '%s' "$aggregate_hash" > "$BASE/aggregate.sha256"
     if [ "$run_mode" = full ]; then

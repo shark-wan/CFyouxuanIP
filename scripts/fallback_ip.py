@@ -54,11 +54,19 @@ def format_endpoint(host: str, port: int) -> str:
     return f"{rendered}:{port}"
 
 
-def format_output(ranked: list[tuple], reachable: list[tuple]) -> list[str]:
+def format_output(ranked: list[tuple], reachable: list[tuple], prefix: str = "") -> list[str]:
+    """
+    Generate output with optional prefix for degraded mode.
+
+    Args:
+        ranked: List of (host, port, name, tcp_ms, speed_bps) tuples
+        reachable: List of (host, port, name, tcp_ms) tuples
+        prefix: Prefix for ranked labels (e.g., "旧-" for degraded mode)
+    """
     labels = ("AAA", "BBB", "CCC", "DDD", "EEE")
     ranked_keys = {(host, port) for host, port, *_ in ranked}
     output = [
-        f"{format_endpoint(host, port)}#{label}-{name}"
+        f"{format_endpoint(host, port)}#{prefix}{label}-{name}"
         for label, (host, port, name, _tcp, _speed) in zip(labels, ranked)
     ]
     secondary_rank = 0
@@ -76,6 +84,20 @@ def main() -> None:
     # repository, so an unset or unusable secret is a normal configuration
     # state.  In that case leave the last Android result intact and let the
     # next heartbeat restore normal operation.
+
+    mode = os.environ.get("FALLBACK_MODE", "normal")  # normal, degraded, abandon
+
+    if mode == "abandon":
+        # 6 小时无心跳：放弃排名，直接使用 aggregate 原文
+        print("fallback mode: abandon (6h+ no heartbeat)")
+        rows = parse_aggregate()
+        output = [f"{format_endpoint(host, port)}#{name}" for host, port, name in rows]
+        temporary = OUTPUT.with_name(OUTPUT.name + ".tmp")
+        temporary.write_text("\n".join(output) + "\n", encoding="utf-8")
+        temporary.replace(OUTPUT)
+        print(f"fallback wrote {len(output)} aggregate nodes (no ranking)")
+        return
+
     if not os.environ.get("SG_SUB_URL", "").strip():
         print("fallback skipped: SG_SUB_URL/CF_SUB_URL secret is not configured")
         return
@@ -113,11 +135,19 @@ def main() -> None:
     if len(ranked) < 5:
         print(f"fallback skipped: only {len(ranked)} SG/JP speed tests completed; keeping last ranked file")
         return
-    output = format_output(ranked, reachable)
+
+    # 降级模式：标记 "旧-"
+    prefix = "旧-" if mode == "degraded" else ""
+    output = format_output(ranked, reachable, prefix=prefix)
+
     temporary = OUTPUT.with_name(OUTPUT.name + ".tmp")
     temporary.write_text("\n".join(output) + "\n", encoding="utf-8")
     temporary.replace(OUTPUT)
-    print(f"fallback wrote {len(output)} reachable nodes and {len(ranked)} speed-ranked nodes")
+
+    if mode == "degraded":
+        print(f"fallback wrote {len(output)} nodes with '旧-' prefix (1h+ no heartbeat)")
+    else:
+        print(f"fallback wrote {len(output)} reachable nodes and {len(ranked)} speed-ranked nodes")
 
 
 if __name__ == "__main__":

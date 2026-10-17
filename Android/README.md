@@ -12,9 +12,9 @@
 - Xray arm64：从官方 release 下载到设备的 `/data/adb/cfyouxuanip/xray`，只在设备本地使用，不提交二进制。
 - 私有配置：设备上的 `/data/adb/cfyouxuanip/config.env`，权限为 `0600`。
 
-worker 每小时从 GitHub 获取 `ip.aggregate.txt`，对全部节点执行 TCP connect 测试；从可达的 SG/JP 节点中按延迟取前 10 个，用 Xray 连接到订阅节点，再通过非 Cloudflare 的 OVH 文件下载 128 KiB 测速，并按首字节到下载完成的时间计算速率。未收到数据的样本不参与排名。结果写成 `ip.txt`：第 1 至 5 行使用 `AAA`、`BBB`、`CCC`、`DDD`、`EEE`，其余节点按 TCP 延迟排序并编号为 `1.JPxx`、`2.SGxx` 等。
+worker 每小时从 GitHub 获取 `ip.aggregate.txt`，对全部节点执行 TCP connect 测试；从可达的 SG/JP 节点中按延迟取前 10 个，用 Xray 连接到订阅节点，再通过非 Cloudflare 的 OVH 文件下载 1 MiB 测速，取 2 次采样中位数，并按首字节到下载完成的时间计算速率。未收到数据的样本不参与排名。结果写成 `ip.txt`：第 1 至 5 行使用 `AAA`、`BBB`、`CCC`、`DDD`、`EEE`，其余节点按 TCP 延迟排序并编号为 `1.JPxx`、`2.SGxx` 等。
 
-首次汇聚、候选集合变化或测速算法更新时执行完整测速。普通小时只重新测试上一轮第 4、5 名，并与上一轮第 1、2、3 名比较后重排。设备还提交 `device-status.json` 作为心跳。
+首次汇聚、候选集合变化或测速算法更新时执行完整测速。普通小时先对上一轮五名做 TCP 存活检查，失效节点直接删除，剩余节点全部重新测速后重排；存活少于三个时退回完整测速。设备还提交 `device-status.json` 作为心跳。
 
 ### Why：为什么这样部署
 
@@ -35,8 +35,8 @@ worker 每小时从 GitHub 获取 `ip.aggregate.txt`，对全部节点执行 TCP
 - GitHub 汇聚：默认每 6 小时一次。
 - Android worker：默认每 1 小时一次；设备启动脚本会先启动守护进程。
 - 完整测速：首次运行或 `ip.aggregate.txt` 内容变化时。
-- 增量测速：其他小时，只测上一轮第 4、5 名。
-- GitHub 兜底：每小时检查一次；`device-status.json` 超过 90 分钟未更新才执行。
+- 增量测速：其他小时，先 TCP 复核上一轮五名，再对存活节点重新测速排序。
+- GitHub 兜底：每小时检查一次；心跳超过 90 分钟未更新时由 runner 重新测速并加 `旧-` 前缀，超过 6 小时则直接发布未排序的 aggregate 原文。
 
 ### Where：文件和服务在哪里
 

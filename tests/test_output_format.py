@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import apply_sg_ranking
 import collect_cf_ips
 import fallback_ip
+import heartbeat_guard
 import sg_optimizer
 import validate_outputs
 
@@ -82,6 +83,75 @@ class OutputFormatTests(unittest.TestCase):
             "192.0.2.6:443#1.JP6",
             "192.0.2.7:443#2.SG7",
         ])
+
+    def test_fallback_degraded_prefix_is_accepted_by_validator(self):
+        ranked = [
+            (f"192.0.2.{index}", 443, f"SG{index}", 20.0 + index, 1000 - index)
+            for index in range(1, 6)
+        ]
+        reachable = [("192.0.2.6", 443, "JP6", 10.0)]
+
+        output = fallback_ip.format_output(ranked, reachable, prefix="旧-")
+
+        self.assertEqual(output[0], "192.0.2.1:443#旧-AAA-SG1")
+        self.assertEqual(output[4], "192.0.2.5:443#旧-EEE-SG5")
+        self.assertEqual(output[5], "192.0.2.6:443#1.JP6")
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "ip.txt"
+            path.write_text("\n".join(output) + "\n", encoding="utf-8")
+            self.assertEqual(validate_outputs.validate_ip(path), [])
+
+    def test_validator_accepts_unranked_abandon_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "ip.txt"
+            path.write_text(
+                "192.0.2.1:443#SG1\n"
+                "192.0.2.2:443#JP2\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(validate_outputs.validate_ip(path), [])
+
+    def test_heartbeat_guard_reports_degraded_and_abandon_thresholds(self):
+        import heartbeat_guard
+        from datetime import datetime, timedelta, timezone
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "device-status.json"
+            env = {"CF_HEARTBEAT_MAX_AGE": "5400"}
+
+            def write(age_seconds):
+                stamp = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+                path.write_text(
+                    json.dumps({
+                        "updated_at": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "publish": {"ip_ok": True},
+                    }),
+                    encoding="utf-8",
+                )
+
+            with patch.object(heartbeat_guard, "Path", return_value=path), patch.dict(
+                heartbeat_guard.os.environ, env, clear=False
+            ), patch("sys.argv", ["heartbeat_guard.py"]):
+                import contextlib, io
+
+                for age, expected in (
+                    (300, ("false", "false", "false")),
+                    (7200, ("true", "true", "false")),
+                    (30000, ("true", "true", "true")),
+                ):
+                    write(age)
+                    buffer = io.StringIO()
+                    with contextlib.redirect_stdout(buffer):
+                        heartbeat_guard.main()
+                    values = dict(
+                        line.split("=") for line in buffer.getvalue().strip().splitlines()
+                    )
+                    self.assertEqual(
+                        (values["stale"], values["degraded"], values["abandon"]),
+                        expected,
+                        f"age={age}",
+                    )
 
     def test_ranking_script_numbers_remainder_and_is_repeatable(self):
         with tempfile.TemporaryDirectory() as temp:

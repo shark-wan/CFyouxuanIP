@@ -54,8 +54,24 @@ def validate_aggregate(path: Path) -> list[str]:
 def validate_ip(path: Path) -> list[str]:
     errors: list[str] = []
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+    # Abandon mode: pure aggregate dump (no ranking at all)
+    if lines and not any(line.split("#", 1)[-1].startswith(("AAA", "BBB", "CCC", "DDD", "EEE", "旧-")) for line in lines if "#" in line):
+        # Validate as aggregate format
+        for number, line in enumerate(lines, 1):
+            parsed = parse_endpoint(line)
+            if not parsed:
+                errors.append(f"ip.txt line {number} has invalid endpoint format (abandon mode)")
+            else:
+                host, port, name = parsed
+                region = re.match(r"^(HK|JP|KR|SG|MY)(?:[-_]?\d+)?$", name.split("-", 1)[0].split("_", 1)[0])
+                if not region:
+                    errors.append(f"ip.txt line {number} has unsupported region label (abandon mode)")
+        return errors
+
     if len(lines) < len(RANK_LABELS):
         return ["ip.txt has fewer than five ranked entries"]
+
     seen: set[tuple[str, int]] = set()
     for number, line in enumerate(lines, 1):
         parsed = parse_endpoint(line)
@@ -67,9 +83,14 @@ def validate_ip(path: Path) -> list[str]:
         if key in seen:
             errors.append(f"ip.txt line {number} duplicates an endpoint")
         seen.add(key)
-        if number <= len(RANK_LABELS) and not name.startswith(RANK_LABELS[number - 1] + "-"):
-            errors.append(f"ip.txt line {number} is missing {RANK_LABELS[number - 1]} label")
-        if number > len(RANK_LABELS) and not re.match(r"^\d+\.", name):
+
+        # Accept both "AAA-SG65" and "旧-AAA-SG65"
+        stripped = name[2:] if name.startswith("旧-") else name
+        if number <= len(RANK_LABELS):
+            expected = RANK_LABELS[number - 1] + "-"
+            if not stripped.startswith(expected):
+                errors.append(f"ip.txt line {number} is missing {RANK_LABELS[number - 1]} label")
+        elif not re.match(r"^\d+\.", stripped):
             errors.append(f"ip.txt line {number} is missing secondary rank")
     return errors
 
