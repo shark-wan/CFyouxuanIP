@@ -12,9 +12,9 @@
 - Xray arm64：从官方 release 下载到设备的 `/data/adb/cfyouxuanip/xray`，只在设备本地使用，不提交二进制。
 - 私有配置：设备上的 `/data/adb/cfyouxuanip/config.env`，权限为 `0600`。
 
-worker 每小时从 GitHub 获取 `ip.aggregate.txt`，对全部节点执行 TCP connect 测试；从可达的 SG/JP 节点中按延迟取前 10 个，用 Xray 连接到订阅节点，再通过非 Cloudflare 的 OVH 文件测下载速度。结果写成 `ip.txt`：第 1 至 5 行使用 `AAA`、`BBB`、`CCC`、`DDD`、`EEE`，第 6 行起按 TCP 延迟排列其余可达节点。
+worker 每小时从 GitHub 获取 `ip.aggregate.txt`，对全部节点执行 TCP connect 测试；从可达的 SG/JP 节点中按延迟取前 10 个，用 Xray 连接到订阅节点，再通过非 Cloudflare 的 OVH 文件下载 128 KiB 测速，并按首字节到下载完成的时间计算速率。未收到数据的样本不参与排名。结果写成 `ip.txt`：第 1 至 5 行使用 `AAA`、`BBB`、`CCC`、`DDD`、`EEE`，其余节点按 TCP 延迟排序并编号为 `1.JPxx`、`2.SGxx` 等。
 
-首次汇聚或候选集合变化时执行完整测速。普通小时只重新测试上一轮第 4、5 名，并与上一轮第 1、2、3 名比较后重排。设备还提交 `device-status.json` 作为心跳。
+首次汇聚、候选集合变化或测速算法更新时执行完整测速。普通小时只重新测试上一轮第 4、5 名，并与上一轮第 1、2、3 名比较后重排。设备还提交 `device-status.json` 作为心跳。
 
 ### Why：为什么这样部署
 

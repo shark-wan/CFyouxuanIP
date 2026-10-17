@@ -13,6 +13,10 @@ def main() -> None:
     if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("status is not an object")
+            if data.get("publish", {}).get("ip_ok") is False:
+                raise ValueError("last ip.txt publication failed")
             stamp = datetime.fromisoformat(str(data["updated_at"]).replace("Z", "+00:00"))
             seconds = max(0, (datetime.now(timezone.utc) - stamp).total_seconds())
             age = f"{seconds:.0f}"

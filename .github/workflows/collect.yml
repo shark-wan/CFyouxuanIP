@@ -22,7 +22,7 @@ jobs:
       - name: Collect nodes
         run: python scripts/collect_cf_ips.py
       - name: Verify aggregate output
-        run: test -f ip.aggregate.txt
+        run: python scripts/validate_outputs.py ip.aggregate.txt
       - name: Commit aggregate
         run: |
           if git diff --quiet -- ip.aggregate.txt; then

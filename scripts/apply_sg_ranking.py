@@ -9,6 +9,7 @@ RANKING = Path("sg-ranking.json")
 IP_FILE = Path("ip.txt")
 ENDPOINT_RE = re.compile(r"^(?P<address>\[[^]]+\]|[^:]+):(?P<port>\d+)#")
 RANK_PREFIX_RE = re.compile(r"^(?:(?:AAA|BBB|CCC)-)+", re.IGNORECASE)
+SECONDARY_PREFIX_RE = re.compile(r"^\d+\.")
 REGION_NAME_RE = {
     "SG": re.compile(r"^SG(?:$|[-_]?\d)", re.IGNORECASE),
     "JP": re.compile(r"^JP(?:$|[-_]?\d)", re.IGNORECASE),
@@ -16,7 +17,7 @@ REGION_NAME_RE = {
 
 
 def canonical_name(name):
-    return RANK_PREFIX_RE.sub("", name.strip())
+    return SECONDARY_PREFIX_RE.sub("", RANK_PREFIX_RE.sub("", name.strip()))
 
 
 def has_position_labels(line):
@@ -105,7 +106,11 @@ def main():
         for line in aggregate
         if endpoint(line) not in ranked_endpoints and not has_position_labels(line)
     ]
-    IP_FILE.write_text("\n".join(ranked + remainder) + "\n", encoding="utf-8")
+    numbered_remainder = [
+        f"{line.rsplit('#', 1)[0]}#{rank}.{canonical_name(line_name(line))}"
+        for rank, line in enumerate(remainder, 1)
+    ]
+    IP_FILE.write_text("\n".join(ranked + numbered_remainder) + "\n", encoding="utf-8")
     print(f"applied {len(ranked)} SG/JP ranking entries; kept {len(remainder)} aggregate entries")
 
 

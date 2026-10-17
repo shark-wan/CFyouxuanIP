@@ -28,7 +28,7 @@ TEST_URL = os.environ.get(
     "https://proof.ovh.net/files/10Mb.dat",
 )
 TEST_BYTES = int(os.environ.get("SG_TEST_BYTES", "8388608"))
-MEASUREMENT_ID = hashlib.sha256(f"{TEST_URL}\n{TEST_BYTES}\nrange-download".encode()).hexdigest()
+MEASUREMENT_ID = hashlib.sha256(f"{TEST_URL}\n{TEST_BYTES}\nrange-body-download-v2".encode()).hexdigest()
 RANKING_FILE = ROOT / "sg-ranking.json"
 STATE_FILE = Path(os.environ.get("SG_STATE_FILE", "/var/lib/xray-sg-optimizer/state.json"))
 TCP_ATTEMPTS = 3
@@ -130,7 +130,7 @@ def tcp_probe(node: dict) -> dict:
         except OSError:
             pass
     result = dict(node)
-    result["tcp_ms"] = round(statistics.median(samples), 2) if samples else None
+    result["tcp_ms"] = max(0.01, round(statistics.median(samples), 2)) if samples else None
     return result
 
 
@@ -186,6 +186,15 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def body_download_rate(
+    size_bytes: float, time_starttransfer: float, time_total: float
+) -> tuple[float, float] | None:
+    transfer_seconds = time_total - time_starttransfer
+    if size_bytes <= 0 or transfer_seconds <= 0:
+        return None
+    return round(size_bytes / transfer_seconds, 2), round(transfer_seconds, 6)
+
+
 def speed_probe(node: dict) -> dict:
     result = dict(node)
     result["speed_bps"] = None
@@ -211,19 +220,23 @@ def speed_probe(node: dict) -> dict:
                 "--proxy", f"socks5h://127.0.0.1:{port}",
                 "--connect-timeout", str(PROXY_TIMEOUT), "--max-time", str(SPEED_TIMEOUT),
                 "--range", f"0-{TEST_BYTES - 1}",
-                "-o", "/dev/null", "-w", "%{size_download}\t%{time_total}",
+                "-o", "/dev/null",
+                "-w", "\t".join(("%{size_download}", "%{time_starttransfer}", "%{time_total}")),
                 TEST_URL,
             ]
             completed = subprocess.run(cmd, capture_output=True, text=True, timeout=SPEED_TIMEOUT + 5)
             if completed.returncode == 0:
                 fields = completed.stdout.strip().split("\t")
-                if len(fields) == 2:
+                if len(fields) == 3:
                     size = float(fields[0])
-                    seconds = float(fields[1])
-                    if size > 0 and seconds > 0:
+                    first_byte = float(fields[1])
+                    total_seconds = float(fields[2])
+                    measurement = body_download_rate(size, first_byte, total_seconds)
+                    if measurement:
+                        speed_bps, seconds = measurement
                         result["speed_bytes"] = int(size)
-                        result["speed_seconds"] = round(seconds, 3)
-                        result["speed_bps"] = round(size / seconds, 2)
+                        result["speed_seconds"] = seconds
+                        result["speed_bps"] = speed_bps
         except (OSError, subprocess.SubprocessError, ValueError):
             pass
         finally:
@@ -418,7 +431,7 @@ def ranking_payload(
     return {
         "version": 2,
         "region": "SG+JP",
-        "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range download",
+        "method": "TCP median of 3; speed-test TCP top 10 with fallback; non-Cloudflare OVH 8 MiB range body-transfer rate",
         "generated_at": generated_at,
         "candidate_fingerprint": sg_hash,
         "jp_candidate_fingerprint": jp_hash,

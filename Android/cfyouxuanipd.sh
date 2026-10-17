@@ -23,6 +23,9 @@ BOOTSTRAP_PROXY=${CFY_BOOTSTRAP_PROXY:-}
 AUTO_PROXY=${CFY_AUTO_PROXY:-1}
 AUTO_PROXY_BOOTSTRAP=${CFY_AUTO_PROXY_BOOTSTRAP:-0}
 STATE=$BASE/state.tsv
+MEASUREMENT_VERSION=body-rate-v2
+MEASUREMENT_FILE=$BASE/measurement.version
+RUN_LOCK=$BASE/run.lock
 AGGREGATE=$BASE/ip.aggregate.txt
 REACHABLE=$BASE/reachable.tsv
 SUBSCRIPTION=$BASE/subscription.txt
@@ -30,6 +33,7 @@ LOG=$BASE/worker.log
 API=https://api.github.com/repos/$REPO/contents
 RAW=https://raw.githubusercontent.com/$REPO/$BRANCH/ip.aggregate.txt
 DEVICE_ID=${CFY_DEVICE_ID:-unknown}
+TAB=$(printf '\t')
 
 mkdir -p "$BASE"
 umask 077
@@ -40,6 +44,38 @@ log() {
 }
 
 die() { log "ERROR: $*"; exit 1; }
+
+acquire_run_lock() {
+    if [ -d "$RUN_LOCK" ]; then
+        old_pid=$(cat "$RUN_LOCK/pid" 2>/dev/null || true)
+        case "$old_pid" in
+            ''|*[!0-9]*) rm -rf "$RUN_LOCK" ;;
+            *)
+                if ! kill -0 "$old_pid" 2>/dev/null; then
+                    rm -rf "$RUN_LOCK"
+                fi
+                ;;
+        esac
+    fi
+    if ! mkdir "$RUN_LOCK" 2>/dev/null; then
+        log 'run skipped: another worker invocation holds the lock'
+        return 1
+    fi
+    printf '%s\n' "$$" > "$RUN_LOCK/pid"
+    return 0
+}
+
+release_run_lock() {
+    rm -rf "$RUN_LOCK"
+}
+
+run_once_locked() {
+    acquire_run_lock || return 0
+    run_once
+    rc=$?
+    release_run_lock
+    return "$rc"
+}
 
 url_decode() {
     # Subscription links use these escapes for JSON and paths.  Values are
@@ -63,7 +99,7 @@ endpoint_key() { printf '%s:%s\n' "$1" "$2"; }
 
 github_curl() {
     if [ -n "$GITHUB_PROXY" ]; then
-        curl --proxy "$GITHUB_PROXY" "$@" || curl "$@"
+        curl --proxy "$GITHUB_PROXY" "$@"
     else
         curl "$@"
     fi
@@ -133,7 +169,11 @@ probe_aggregate() {
 fetch_subscription() {
     [ -n "$SUB_URL" ] || return 1
     raw=$BASE/subscription.raw
-    curl -fsSL --connect-timeout 20 --max-time 90 "$SUB_URL" -o "$raw" || return 1
+    if [ -n "$GITHUB_PROXY" ]; then
+        curl --proxy "$GITHUB_PROXY" -fsSL --connect-timeout 20 --max-time 90 "$SUB_URL" -o "$raw" || return 1
+    else
+        curl -fsSL --connect-timeout 20 --max-time 90 "$SUB_URL" -o "$raw" || return 1
+    fi
     first=$(head -n 1 "$raw")
     case "$first" in
         vless://*|vmess://*) cp "$raw" "$SUBSCRIPTION" ;;
@@ -144,11 +184,17 @@ fetch_subscription() {
 
 find_uri() {
     host=$1; port=$2
-    # The aggregate contains the same endpoint and region suffix as the
-    # subscription.  Match the endpoint directly to preserve its UUID and
-    # XHTTP transport parameters.
-    grep -F "@$host:$port?" "$SUBSCRIPTION" | head -n 1 || \
-        grep -F "@[$host]:$port?" "$SUBSCRIPTION" | head -n 1
+    case "$host" in
+        \[*\]) host=${host#\[}; host=${host%\]} ;;
+    esac
+    # Match the normalized endpoint directly to preserve its UUID and
+    # transport parameters.  Do not use grep|head with ||: head succeeds even
+    # when grep found no line, which would skip the IPv6 fallback.
+    uri=$(grep -F "@$host:$port?" "$SUBSCRIPTION" | head -n 1 || true)
+    if [ -z "$uri" ]; then
+        uri=$(grep -F "@[$host]:$port?" "$SUBSCRIPTION" | head -n 1 || true)
+    fi
+    [ -n "$uri" ] && printf '%s\n' "$uri"
 }
 
 write_xray_config() {
@@ -210,17 +256,21 @@ speed_probe() {
     done
     result=''
     if [ "$ready" -eq 1 ]; then
-        result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
+        result=$(curl -fsSL --proxy "socks5h://127.0.0.1:$socks_port" --connect-timeout 8 --max-time 35 --range "0-$((TEST_BYTES - 1))" -o /dev/null -w '%{size_download}	%{time_starttransfer}	%{time_total}' "$TEST_URL" 2>/dev/null || true)
         log "speed curl endpoint=$socks_port result=$result"
     fi
     kill "$xpid" >/dev/null 2>&1 || true
     wait "$xpid" 2>/dev/null || true
     rm -f "$cfg"
-    size=${result%%	*}; seconds=${result#*	}
-    case "$size" in ''|*[!0-9.]*) return 1 ;; esac
+    size=${result%%"$TAB"*}
+    remainder=${result#*"$TAB"}
+    first_byte=${remainder%%"$TAB"*}
+    seconds=${remainder#*"$TAB"}
+    case "$size" in ''|0|*[!0-9]*) return 1 ;; esac
+    case "$first_byte" in ''|*[!0-9.]*) return 1 ;; esac
     case "$seconds" in ''|0|*[!0-9.]*) return 1 ;; esac
-    bps=$(awk -v s="$size" -v t="$seconds" 'BEGIN { if (t > 0) printf "%.0f", s/t; }')
-    [ -n "$bps" ] || return 1
+    bps=$(awk -v s="$size" -v f="$first_byte" -v t="$seconds" 'BEGIN { d=t-f; if (d > 0) printf "%.0f", s/d; }')
+    case "$bps" in ''|0|*[!0-9]*) return 1 ;; esac
     printf '%s' "$bps"
 }
 
@@ -284,11 +334,13 @@ build_output() {
         printf '%s:%s#%s-%s\n' "$host" "$port" "$label" "$base" >> "$output.tmp"
         endpoint_key "$host" "$port" >> "$BASE/top.keys"
     done < "$ranked"
+    secondary_rank=0
     while IFS='	' read -r host port name latency; do
         [ -n "$host" ] || continue
         key=$(endpoint_key "$host" "$port")
         is_top_endpoint "$key" && continue
-        printf '%s:%s#%s\n' "$host" "$port" "$name" >> "$output.tmp"
+        secondary_rank=$((secondary_rank + 1))
+        printf '%s:%s#%s.%s\n' "$host" "$port" "$secondary_rank" "$name" >> "$output.tmp"
     done < "$REACHABLE"
     mv "$output.tmp" "$output"
 }
@@ -324,27 +376,40 @@ write_status() {
     status=$BASE/device-status.json
     now=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
     cat > "$status" <<EOF
-{"device_id":"$(json_escape "$DEVICE_ID")","updated_at":"$now","aggregate_sha256":"$aggregate_hash","mode":"$mode","reachable":$reachable_count,"speed_tested":$speed_count,"worker_version":"1.0"}
+{"device_id":"$(json_escape "$DEVICE_ID")","updated_at":"$now","aggregate_sha256":"$aggregate_hash","mode":"$mode","reachable":$reachable_count,"speed_tested":$speed_count,"worker_version":"1.0","publish":{"ip_ok":true}}
 EOF
     github_put "$status" device-status.json "Android optimizer heartbeat ($mode)"
 }
 
 full_measurement() {
     candidates=$BASE/candidates.tsv
-    awk -F '	' '$3 ~ /(^|[-_])(SG|JP)([0-9]|$)/ {print}' "$REACHABLE" | head -n 10 > "$candidates"
+    awk -F '\t' '$3 ~ /(^|[-_])(SG|JP)([0-9]|$)/ {print}' "$REACHABLE" > "$candidates"
     : > "$BASE/measured.tsv"
     count=0
-    while IFS='	' read -r host port name latency; do
-        [ -n "$host" ] || continue
-        uri=$(find_uri "$host" "$port" || true)
-        [ -n "$uri" ] || continue
-        speed=$(speed_probe "$uri" || true)
-        if [ -n "$speed" ]; then
-            printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$speed" >> "$BASE/measured.tsv"
-            count=$((count + 1))
-        fi
-    done < "$candidates"
+    total_candidates=$(wc -l < "$candidates" | tr -d ' ')
+    offset=0
+    while [ "$offset" -lt "$total_candidates" ] && [ "$count" -lt 5 ]; do
+        batch_start=$((offset + 1))
+        batch_end=$((offset + 10))
+        sed -n "${batch_start},${batch_end}p" "$candidates" > "$BASE/candidate-batch.tsv"
+        while IFS='	' read -r host port name latency; do
+            [ -n "$host" ] || continue
+            uri=$(find_uri "$host" "$port" || true)
+            [ -n "$uri" ] || continue
+            speed=$(speed_probe "$uri" || true)
+            if [ -n "$speed" ]; then
+                printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$port" "$name" "$latency" "$speed" >> "$BASE/measured.tsv"
+                count=$((count + 1))
+            fi
+        done < "$BASE/candidate-batch.tsv"
+        offset=$((offset + 10))
+    done
     sort -t '	' -k5,5nr -k4,4n "$BASE/measured.tsv" | head -n 5 > "$BASE/ranked.tsv"
+    if [ "$count" -lt 5 ]; then
+        log "full ranking kept unchanged: only $count non-zero speed tests completed"
+        printf '%s' "$count"
+        return 0
+    fi
     cp "$BASE/ranked.tsv" "$STATE"
     build_output "$BASE/ranked.tsv"
     printf '%s' "$count"
@@ -378,26 +443,35 @@ incremental_measurement() {
 }
 
 run_once() {
-    fetch_subscription || { log 'subscription fetch failed'; return 1; }
     had_state=0; [ -s "$STATE" ] && had_state=1
+    if [ "$had_state" -eq 0 ] && [ -n "$BOOTSTRAP_PROXY" ]; then
+        GITHUB_PROXY=$BOOTSTRAP_PROXY
+    fi
+    fetch_subscription || { log 'subscription fetch failed'; return 1; }
     if [ "$had_state" -eq 1 ]; then
         prepare_github_proxy
-    elif [ -n "$BOOTSTRAP_PROXY" ]; then
-        GITHUB_PROXY=$BOOTSTRAP_PROXY
     fi
     fetch_aggregate || { log 'aggregate fetch failed'; return 1; }
     aggregate_hash=$(sha256sum "$AGGREGATE" | awk '{print $1}')
     reachable_count=$(probe_aggregate)
     [ "$reachable_count" -gt 0 ] || { log 'no reachable nodes'; return 1; }
     old_hash=''; [ -f "$BASE/aggregate.sha256" ] && old_hash=$(cat "$BASE/aggregate.sha256")
+    measurement_changed=1
+    if [ -r "$MEASUREMENT_FILE" ] && [ "$(cat "$MEASUREMENT_FILE")" = "$MEASUREMENT_VERSION" ]; then
+        measurement_changed=0
+    fi
     run_mode=incremental
-    if [ "$aggregate_hash" != "$old_hash" ] || [ ! -s "$STATE" ] || [ "$(wc -l < "$STATE")" -lt 5 ]; then
+    if [ "$aggregate_hash" != "$old_hash" ] || [ "$measurement_changed" -eq 1 ] || [ ! -s "$STATE" ] || [ "$(wc -l < "$STATE")" -lt 5 ]; then
         run_mode=full
         speed_count=$(full_measurement)
+        [ "$speed_count" -ge 5 ] || return 1
     else
         speed_count=$(incremental_measurement)
     fi
     printf '%s' "$aggregate_hash" > "$BASE/aggregate.sha256"
+    if [ "$run_mode" = full ]; then
+        printf '%s' "$MEASUREMENT_VERSION" > "$MEASUREMENT_FILE"
+    fi
     # The first complete pass now has a measured rank-1 node.  Start the
     # device Xray proxy from that node before committing to GitHub.
     if [ "$run_mode" = full ]; then
@@ -409,17 +483,23 @@ run_once() {
         GITHUB_PROXY=''
         prepare_github_proxy
     fi
-    github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($run_mode)" || log 'ip.txt upload failed'
-    write_status "$run_mode" "$reachable_count" "$speed_count" "$aggregate_hash" || log 'heartbeat upload failed'
+    github_put "$BASE/ip.txt" ip.txt "Android optimizer update ($run_mode)" || {
+        log 'ip.txt upload failed; heartbeat suppressed'
+        return 1
+    }
+    write_status "$run_mode" "$reachable_count" "$speed_count" "$aggregate_hash" || {
+        log 'heartbeat upload failed'
+        return 1
+    }
     log "$run_mode complete: reachable=$reachable_count speed_tests=$speed_count"
     return 0
 }
 
 case "${1:-daemon}" in
-    once) run_once ;;
+    once) run_once_locked ;;
     daemon)
         while :; do
-            run_once || true
+            run_once_locked || true
             sleep "$POLL_SECONDS"
         done
         ;;

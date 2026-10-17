@@ -44,15 +44,15 @@ def read_url(host):
 
 def maybe_b64decode(text):
     clean = re.sub(r"\s+", "", text)
-    if not clean or len(clean) % 4 or not re.fullmatch(r"[A-Za-z0-9+/_-]+={0,2}", clean):
+    if not clean or not re.fullmatch(r"[A-Za-z0-9+/_-]+={0,2}", clean):
         return text
-    padded = clean + "=" * (-len(clean) % 4)
-    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
-        try:
-            return decoder(padded).decode("utf-8", "replace")
-        except Exception:
-            pass
-    return text
+    normalized = clean.replace("-", "+").replace("_", "/")
+    padded = normalized + "=" * (-len(normalized) % 4)
+    try:
+        decoded = base64.b64decode(padded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return text
+    return decoded if "://" in decoded else text
 
 
 def detect_region(name):
@@ -65,6 +65,12 @@ def detect_region(name):
             elif word in name:
                 return region
     return None
+
+
+def format_endpoint(address, port):
+    if ":" in address and not address.startswith("["):
+        address = f"[{address}]"
+    return f"{address}:{port}"
 
 
 def parse_items(text):
@@ -100,7 +106,7 @@ def collect():
     lines = []
     for region in REGION_ORDER:
         for index, (address, port) in enumerate(grouped[region], 1):
-            lines.append(f"{address}:{port}#{region}{index}")
+            lines.append(f"{format_endpoint(address, port)}#{region}{index}")
 
     if not lines:
         raise RuntimeError("no matching HK/SG/MY/JP nodes collected; " + "; ".join(errors))
@@ -113,8 +119,11 @@ def collect():
 
 def main():
     # Keep the upstream aggregate separate from the device-produced ip.txt.
-    # The Android worker consumes this file and publishes the filtered result.
-    Path("ip.aggregate.txt").write_text(collect(), encoding="utf-8")
+    # Replace it atomically so an interrupted Action cannot publish a partial file.
+    output = Path("ip.aggregate.txt")
+    temporary = output.with_name(output.name + ".tmp")
+    temporary.write_text(collect(), encoding="utf-8")
+    temporary.replace(output)
 
 
 if __name__ == "__main__":

@@ -36,7 +36,9 @@ jobs:
           XRAY_BIN: /tmp/xray/xray
           SG_TEST_URL: https://proof.ovh.net/files/10Mb.dat
           SG_TEST_BYTES: "131072"
-        run: python scripts/fallback_ip.py
+        run: |
+          python scripts/fallback_ip.py
+          python scripts/validate_outputs.py ip.txt
       - name: Commit fallback result
         if: steps.guard.outputs.stale == 'true'
         run: |

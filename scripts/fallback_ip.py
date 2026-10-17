@@ -46,7 +46,28 @@ def probe(row: tuple[str, int, str]) -> tuple[str, int, str, float] | None:
             pass
     if not samples:
         return None
-    return host, port, name, round(statistics.median(samples), 2)
+    return host, port, name, max(0.01, round(statistics.median(samples), 2))
+
+
+def format_endpoint(host: str, port: int) -> str:
+    rendered = host if ":" not in host or host.startswith("[") else f"[{host}]"
+    return f"{rendered}:{port}"
+
+
+def format_output(ranked: list[tuple], reachable: list[tuple]) -> list[str]:
+    labels = ("AAA", "BBB", "CCC", "DDD", "EEE")
+    ranked_keys = {(host, port) for host, port, *_ in ranked}
+    output = [
+        f"{format_endpoint(host, port)}#{label}-{name}"
+        for label, (host, port, name, _tcp, _speed) in zip(labels, ranked)
+    ]
+    secondary_rank = 0
+    for host, port, name, _tcp in reachable:
+        if (host, port) in ranked_keys:
+            continue
+        secondary_rank += 1
+        output.append(f"{format_endpoint(host, port)}#{secondary_rank}.{name}")
+    return output
 
 
 def main() -> None:
@@ -74,30 +95,28 @@ def main() -> None:
     if not by_endpoint:
         print("fallback skipped: subscription contained no SG/JP candidates")
         return
-    top = [item for item in reachable if (item[0], item[1]) in by_endpoint][:10]
+    top = [item for item in reachable if (item[0], item[1]) in by_endpoint]
     measured = []
-    for host, port, name, tcp_ms in top:
-        node = dict(by_endpoint[(host, port)])
-        node["tcp_ms"] = tcp_ms
-        result = speed_probe(node)
-        if result.get("speed_bps"):
-            measured.append((host, port, name, tcp_ms, result["speed_bps"]))
+    # Try successive TCP-ranked batches.  A slow or broken first batch must not
+    # turn a temporarily sparse sample into an avoidable fallback failure.
+    for start in range(0, len(top), 10):
+        for host, port, name, tcp_ms in top[start:start + 10]:
+            node = dict(by_endpoint[(host, port)])
+            node["tcp_ms"] = tcp_ms
+            result = speed_probe(node)
+            if result.get("speed_bps"):
+                measured.append((host, port, name, tcp_ms, result["speed_bps"]))
+        if len(measured) >= 5:
+            break
     measured.sort(key=lambda item: (-item[4], item[3]))
     ranked = measured[:5]
     if len(ranked) < 5:
         print(f"fallback skipped: only {len(ranked)} SG/JP speed tests completed; keeping last ranked file")
         return
-    ranked_keys = {(host, port) for host, port, *_ in ranked}
-
-    labels = ("AAA", "BBB", "CCC", "DDD", "EEE")
-    output = [
-        f"{host}:{port}#{label}-{name}"
-        for label, (host, port, name, _tcp, _speed) in zip(labels, ranked)
-    ]
-    for host, port, name, _tcp in reachable:
-        if (host, port) not in ranked_keys:
-            output.append(f"{host}:{port}#{name}")
-    OUTPUT.write_text("\n".join(output) + "\n", encoding="utf-8")
+    output = format_output(ranked, reachable)
+    temporary = OUTPUT.with_name(OUTPUT.name + ".tmp")
+    temporary.write_text("\n".join(output) + "\n", encoding="utf-8")
+    temporary.replace(OUTPUT)
     print(f"fallback wrote {len(output)} reachable nodes and {len(ranked)} speed-ranked nodes")
 
 
