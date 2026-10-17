@@ -1,1 +1,1 @@
-{"device_id":"df8a4a22","updated_at":"2026-10-15T18:35:05Z","aggregate_sha256":"63e41519261719864460d072087b244c0c42ae9410942e6610f4f07838b54f69","mode":"incremental","reachable":82,"speed_tested":2,"worker_version":"1.0"}
+{"device_id":"df8a4a22","updated_at":"2026-10-17T04:42:13Z","aggregate_sha256":"4047b20f6aea153e733d5985b366d7841712fdeb340877be2551c18534a78438","mode":"full","reachable":77,"speed_tested":10,"worker_version":"1.0"}
