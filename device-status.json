@@ -1,13 +1,1 @@
-{
-  "device_id": "localhost",
-  "updated_at": "2026-10-19T14:56:19Z",
-  "aggregate_sha256": "c57f707e00d139249a4484c00e73b37c31579a500b9febe223c25bcfaa7e3268",
-  "mode": "incremental",
-  "reachable": 39,
-  "speed_tested": 9,
-  "invalid": 18,
-  "worker_version": "1.1",
-  "publish": {
-    "ip_ok": true
-  }
-}
+{"device_id":"df8a4a22","updated_at":"2026-10-19T08:18:16Z","aggregate_sha256":"d1ea311d89e64747d19a36c5bf2ef848a9dcf851e3222c82d4abe8ea4e5426f8","mode":"incremental","reachable":57,"speed_tested":3,"worker_version":"1.0","publish":{"ip_ok":true}}
