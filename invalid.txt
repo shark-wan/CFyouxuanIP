@@ -1,18 +1,1 @@
-38.47.111.11:443#JP53	curl: (35) Recv failure: Connection reset by peer
-47.84.0.21:443#SG39	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-43.161.254.188:10086#HK5	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-202.144.194.170:443#JP15	curl: (35) Recv failure: Connection reset by peer
-8.209.209.177:443#JP26	curl: (35) Recv failure: Connection reset by peer
-8.216.48.198:443#JP34	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-47.80.61.55:443#KR17	curl: (35) Recv failure: Connection reset by peer
-54.255.217.36:443#SG47	curl: (35) Recv failure: Connection reset by peer
-45.143.233.100:59599#JP10	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-8.211.179.102:443#JP31	curl: (35) Recv failure: Connection reset by peer
-198.176.52.216:27001#JP42	curl: (35) Recv failure: Connection reset by peer
-156.231.115.163:443#JP6	curl: (35) Recv failure: Connection reset by peer
-8.218.228.242:443#HK33	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-43.106.100.252:443#SG22	curl: (35) Recv failure: Connection reset by peer
-47.236.23.50:443#SG28	curl: (35) Recv failure: Connection reset by peer
-47.237.92.5:443#SG33	curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
-82.109.96.205:443#SG59	curl: (35) Recv failure: Connection reset by peer
-45.32.32.18:47389#JP13	curl: (28) Connection timed out after 8103 milliseconds
+43.103.4.68:443#HK7	tcp connect failed
