@@ -1,7 +1,7 @@
 {
   "device_id": "localhost",
-  "updated_at": "2026-10-20T10:25:19Z",
-  "aggregate_sha256": "11076ae53c87bfa0fa018b6c33712d23dd503e798fb33e376c58fb7dc1c5d8c0",
+  "updated_at": "2026-10-20T11:28:28Z",
+  "aggregate_sha256": "f617259cd9983d086dcf84179a48c44ae768c4e8300fe9d66e4884f06bddde8c",
   "mode": "incremental",
   "reachable": 36,
   "speed_tested": 9,
