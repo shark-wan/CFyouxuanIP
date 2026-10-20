@@ -1,11 +1,11 @@
 {
   "device_id": "localhost",
-  "updated_at": "2026-10-20T17:29:29Z",
-  "aggregate_sha256": "bd3757b5d6a479f663eab00aaffd92d9e66d288957f60023f33d26192842ee49",
+  "updated_at": "2026-10-20T21:14:04Z",
+  "aggregate_sha256": "ddbda5aa9ba627fea3cc94d36f9ac5d5432ef9291df658dd0bb8565f5c9cbaee",
   "mode": "incremental",
-  "reachable": 36,
-  "speed_tested": 9,
-  "invalid": 0,
+  "reachable": 35,
+  "speed_tested": 8,
+  "invalid": 1,
   "worker_version": "2.0",
   "publish": {
     "ip_ok": true
