@@ -225,6 +225,20 @@ def parse_aggregate_lines(path: pathlib.Path) -> list[dict[str, str]]:
     return items
 
 
+def short_region(remark: str) -> str:
+    """Return a compact region token compatible with ip.txt's host:port#region format."""
+    value = re.sub(r"\s+", " ", remark or "").strip()
+    match = re.search(r"\b[A-Z]{2}\b", value)
+    if match:
+        return match.group(0)
+    match = re.search(r"\b[A-Z]{3}\b", value)
+    if match:
+        return match.group(0)
+    if any(keyword in value.lower() for keyword in ("域名", "domain")):
+        return "DOMAIN"
+    return "AGG"
+
+
 def format_endpoint(host: str, port: str, remark: str) -> str:
     host = normalize_host(host)
     if ":" in host and not host.startswith("["):
@@ -247,13 +261,24 @@ def write_outputs(
     top_n = args.top or int(config.get("top_n", 20))
     local_top = local_rows[:top_n]
 
-    local_lines = [
-        format_endpoint(row["ip"], port, f"LOCAL-{row['colo']}") for row in local_top
-    ]
-    aggregate_lines = [
-        format_endpoint(row["host"], row["port"], f"AGG-{row['remark']}")
-        for row in aggregate_rows
-    ]
+    seen: set[tuple[str, str]] = set()
+    local_lines: list[str] = []
+    for row in local_top:
+        key = (normalize_host(row["ip"]).lower(), port)
+        if key in seen:
+            continue
+        seen.add(key)
+        local_lines.append(format_endpoint(row["ip"], port, row["colo"] or "CF"))
+
+    aggregate_lines: list[str] = []
+    for row in aggregate_rows:
+        key = (normalize_host(row["host"]).lower(), row["port"])
+        if key in seen:
+            continue
+        seen.add(key)
+        aggregate_lines.append(
+            format_endpoint(row["host"], row["port"], short_region(row["remark"]))
+        )
 
     final_lines = local_lines + aggregate_lines
     ip_path = output_dir / "ip.txt"
@@ -366,32 +391,41 @@ def cmd_install(args: argparse.Namespace) -> int:
     if os.name != "posix":
         print("install command is only supported on Linux", file=sys.stderr)
         return 2
-    install_dir = pathlib.Path(args.install_dir)
+    install_dir = pathlib.Path(args.install_dir).resolve()
     install_dir.mkdir(parents=True, exist_ok=True)
-    for item in (
-        "cfyouxuan.py",
-        "config.json",
-        "aggregate",
-        "engine",
-        "systemd",
-    ):
-        src = ROOT / item
-        dst = install_dir / item
-        if src.is_dir():
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-        else:
-            shutil.copy2(src, dst)
+    source_dir = ROOT.resolve()
+    if source_dir != install_dir:
+        for item in (
+            "cfyouxuan.py",
+            "config.json",
+            "aggregate",
+            "engine",
+            "systemd",
+        ):
+            src = source_dir / item
+            dst = install_dir / item
+            if src.is_dir():
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, dst)
+
     binary = install_dir / "bin" / "cfst"
     binary.parent.mkdir(parents=True, exist_ok=True)
     if not binary.exists():
         print(f"[INSTALL] downloading CloudflareSpeedTest {CFST_VERSION} ARM64")
-        archive = install_dir / "bin" / "cfst.tar.gz"
-        result = run_command(["curl", "-fL", CFST_RELEASE, "-o", str(archive)], cwd=ROOT, timeout=600)
+        archive = binary.parent / "cfst.tar.gz"
+        result = run_command(["curl", "-fL", CFST_RELEASE, "-o", str(archive)], cwd=source_dir, timeout=600)
         if result.returncode != 0:
             raise RuntimeError("failed to download CloudflareSpeedTest")
-        extract = run_command(["tar", "-xzf", str(archive), "-C", str(binary.parent)], cwd=ROOT, timeout=120)
-        if extract.returncode != 0:
-            raise RuntimeError("failed to extract CloudflareSpeedTest")
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="cfst-", dir=binary.parent) as temp_dir:
+            extract = run_command(["tar", "-xzf", str(archive), "-C", temp_dir], cwd=source_dir, timeout=120)
+            if extract.returncode != 0:
+                raise RuntimeError("failed to extract CloudflareSpeedTest")
+            candidates = sorted(pathlib.Path(temp_dir).rglob("cfst"))
+            if not candidates:
+                raise RuntimeError("CloudflareSpeedTest binary was not found in the release archive")
+            shutil.move(str(candidates[0]), binary)
         archive.unlink(missing_ok=True)
     binary.chmod(0o755)
 

@@ -2,10 +2,10 @@
 Description=Run CFyouxuanIP four times daily
 
 [Timer]
-OnCalendar=*-*-* 06:30:00
-OnCalendar=*-*-* 11:30:00
-OnCalendar=*-*-* 17:30:00
-OnCalendar=*-*-* 23:30:00
+OnCalendar=*-*-* 06:30:00 Asia/Shanghai
+OnCalendar=*-*-* 11:30:00 Asia/Shanghai
+OnCalendar=*-*-* 17:30:00 Asia/Shanghai
+OnCalendar=*-*-* 23:30:00 Asia/Shanghai
 AccuracySec=1min
 Persistent=true
 
