@@ -1,13 +1,9 @@
 {
-  "device_id": "localhost",
-  "updated_at": "2026-10-21T11:18:31Z",
-  "aggregate_sha256": "33e939b69e83bfb8c7dafc09c6ad60946d2df4cbaca59da40be2cf763bc7fd9d",
-  "mode": "incremental",
-  "reachable": 33,
-  "speed_tested": 8,
-  "invalid": 0,
-  "worker_version": "2.0",
-  "publish": {
-    "ip_ok": true
-  }
+  "generated_at": "2026-11-08T23:49:16+08:00",
+  "local_count": 20,
+  "aggregate_count": 155,
+  "total_count": 175,
+  "engine": "CloudflareSpeedTest",
+  "engine_version": "v2.3.5",
+  "mode": "httping"
 }

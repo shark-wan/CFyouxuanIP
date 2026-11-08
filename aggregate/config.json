@@ -1,0 +1,20 @@
+{
+  "sources": [
+    "sub.cmliussss.net",
+    "owo.o00o.ooo",
+    "cm.soso.edu.kg",
+    "zrf.zrf.me",
+    "sub.keaeye.icu",
+    "sub.mot.cloudns.biz",
+    "sub.mia.xx.kg",
+    "sub.lzjbaby.com",
+    "sub.xdu.qzz.io"
+  ],
+  "timeout": 20,
+  "retries": 2,
+  "workers": 9,
+  "output_dir": "output",
+  "include_source_remarks": true,
+  "parse_all_proxy_links": false,
+  "insecure": false
+}

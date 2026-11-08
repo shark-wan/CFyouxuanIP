@@ -1,0 +1,32 @@
+{
+  "top_n": 20,
+  "cfst": {
+    "binary": "bin/cfst",
+    "ip_file": "engine/cfst/ip.txt",
+    "result_csv": "output/cfst.csv",
+    "mode": "httping",
+    "routines": 100,
+    "ping_times": 4,
+    "download_count": 10,
+    "download_time": 5,
+    "port": 443,
+    "max_latency_ms": 300,
+    "max_loss_rate": 0.2,
+    "timeout_seconds": 1800
+  },
+  "aggregate": {
+    "output_dir": "aggregate/output",
+    "timeout_seconds": 600
+  },
+  "output": {
+    "dir": "output"
+  },
+  "git": {
+    "push": false,
+    "repo_root": ".",
+    "remote": "origin",
+    "branch": "main",
+    "commit_message": "chore: update optimized IP list"
+  }
+}
+

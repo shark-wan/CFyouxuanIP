@@ -1,0 +1,34 @@
+# Local research clones and private deployment state
+.research/
+known_hosts
+
+# Runtime data
+data/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local configuration and secrets
+config/*.yaml
+config/*.yml
+config/*.env
+.env
+*.pem
+*.key
+*.token
+
+# Build output
+dist/
+bin/
+build/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+.git-old-master-init/
+__pycache__/
+output/
+output-test/

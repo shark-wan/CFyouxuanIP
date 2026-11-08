@@ -1,0 +1,11 @@
+[Unit]
+Description=CFyouxuanIP local optimizer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=/usr/bin/python3 __INSTALL_DIR__/cfyouxuan.py run --push
+TimeoutStartSec=3600
+User=root
